@@ -14,6 +14,9 @@ class PreviewServer(ThreadingHTTPServer):
 
 
 class Preview(SimpleHTTPRequestHandler):
+    # Reuse connections: thousands of short-lived loopback connections intermittently exhaust Windows socket buffers.
+    protocol_version = 'HTTP/1.1'
+
     def send_head(self):
         route = unquote(urlsplit(self.path).path)
         if route in ['/home/assets/font-catalog.js', '/home/assets/private-fonts.css'] or route.startswith('/home/assets/private-fonts/'):
@@ -47,6 +50,7 @@ class Preview(SimpleHTTPRequestHandler):
         if urlsplit(self.path).path == '/':
             self.send_response(302)
             self.send_header('Location', '/home/')
+            self.send_header('Content-Length', '0')
             self.end_headers()
             return
         super().do_GET()

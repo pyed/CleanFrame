@@ -3,14 +3,15 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { python, pythonEnv } from './python.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 
 export async function openPreview({ publicFonts = false } = {}) {
-  const args = ['scripts/preview.py', '--port', '0'];
+  const py = python(), args = [...py.args, 'scripts/preview.py', '--port', '0'];
   if (publicFonts || process.env.CLEANFRAME_PUBLIC_FONTS === '1') args.push('--public-fonts');
-  const server = spawn('python3', args, {
-    cwd: root, stdio: ['ignore', 'pipe', 'pipe']
+  const server = spawn(py.command, args, {
+    cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: pythonEnv()
   });
   let browser;
   let diagnostics = '';

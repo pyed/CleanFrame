@@ -16,6 +16,9 @@ from local_config import ROOT, load_settings, manifest_identity, override_identi
 import package
 from private_files import check_signed_widget, check_widget, private_path, secret_content
 
+WINDOWS = os.name == 'nt'
+posix_only = unittest.skipIf(WINDOWS, 'Uses POSIX symlinks, file modes or terminals; runs on macOS, Linux and CI.')
+
 
 class ToolTests(unittest.TestCase):
     def setUp(self):
@@ -47,6 +50,7 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(load_settings(self.root)['password_file'], password)
         self.assertIsNone(self.config(profile='Other profile')['password_file'])
 
+    @posix_only
     def test_sdk_symlink_resolution_preserves_password_no_follow(self):
         sdk = self.root / '.local/real-sdk'
         sdk.mkdir()
@@ -62,11 +66,12 @@ class ToolTests(unittest.TestCase):
             read_password(settings['password_file'], self.root)
 
     def test_config_identity_validation_and_no_secret_errors(self):
+        sdk = 'C:/opt/my sdk' if WINDOWS else '/opt/my sdk'
         with self.assertRaisesRegex(ValueError, 'Set profile'):
-            self.config(sdk_path='/opt/my sdk')
-        selected = self.config(sdk_path='/opt/my sdk', profile='My profile',
+            self.config(sdk_path=sdk)
+        selected = self.config(sdk_path=sdk, profile='My profile',
                                package_id='AbCdEf1234', app_id='AbCdEf1234.MyHome')
-        self.assertEqual(selected['sdk_path'], Path('/opt/my sdk'))
+        self.assertEqual(selected['sdk_path'], Path(sdk))
         for values in [dict(package_id='AbCdEf1234'), dict(package_id='../unsafe', app_id='../unsafe.Home'),
                        dict(package_id='AbCdEf1234', app_id='Other12345.Home'),
                        dict(password='synthetic secret'), dict(profile='bad\nprofile')]:
@@ -82,6 +87,7 @@ class ToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ten-character'):
             load_settings(self.root)
 
+    @posix_only
     def test_password_permissions_paths_and_contents(self):
         good = self.password()
         self.assertEqual(read_password(good, self.root), b'synthetic password')
@@ -167,6 +173,7 @@ class ToolTests(unittest.TestCase):
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 check_signed_widget(output, selected)
 
+    @posix_only
     def test_fake_sdk_saved_profile_and_password_modes(self):
         cli = self.root / '.local/sdk/tools/ide/bin/tizen'
         cli.parent.mkdir(parents=True)
@@ -236,10 +243,64 @@ with zipfile.ZipFile(target, 'a') as archive:
         with zipfile.ZipFile(target) as archive:
             self.assertEqual(manifest_identity(archive.read('config.xml')), identity)
 
+    @unittest.skipUnless(WINDOWS, 'Windows signing runner')
+    def test_windows_fake_sdk_signs_without_a_terminal(self):
+        bin_dir = self.root / '.local/sdk/tools/ide/bin'
+        bin_dir.mkdir(parents=True)
+        fake = bin_dir / 'fake-tizen.py'
+        fake.write_text('''
+from pathlib import Path
+import shutil
+import sys
+import zipfile
+here = Path(__file__).parent
+if (here / 'fail').exists():
+    print('synthetic secret SDK diagnostic')
+    sys.exit(3)
+if (here / 'prompt').exists():
+    print('Password:', end='', flush=True)
+    input()
+source = Path(sys.argv[-1])
+target = Path(sys.argv[sys.argv.index('-o') + 1]) / source.name
+shutil.copyfile(source, target)
+if not (here / 'unsigned').exists():
+    with zipfile.ZipFile(target, 'a') as archive:
+        archive.writestr('author-signature.xml', '<Signature/>')
+        archive.writestr('signature1.xml', '<Signature/>')
+''')
+        (bin_dir / 'tizen.bat').write_text('@"' + sys.executable + '" "' + str(fake) + '" %*\n')
+        identity = dict(package_id='AbCdEf1234', app_id='AbCdEf1234.MyHome')
+        settings = self.config(sdk_path=str(self.root / '.local/sdk'), profile='My profile', **identity)
+        target = self.root / 'dist/CleanFrame.wgt'
+        with patch.object(package, 'load_settings', return_value=settings):
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                package.main(self.root)
+            self.assertNotIn('synthetic secret', output.getvalue())
+            with zipfile.ZipFile(target) as archive:
+                self.assertEqual(manifest_identity(archive.read('config.xml')), identity)
+            baseline = target.read_bytes()
+            # An unknown profile yields an unsigned package; prompts and failures stop without output.
+            for marker, message in [('unsigned', 'unsigned package'), ('prompt', 'requested a password'), ('fail', 'signing failed')]:
+                (bin_dir / marker).write_text('Synthetic ' + marker)
+                with self.subTest(marker=marker), self.assertRaisesRegex(ValueError, message) as result:
+                    package.main(self.root)
+                self.assertNotIn('synthetic secret', str(result.exception))
+                (bin_dir / marker).rename(bin_dir / ('unused-' + marker))
+                self.assertEqual(target.read_bytes(), baseline)
+            for unsafe in ['Profile & more', 'Profile "quoted"', '100% profile']:
+                with self.subTest(profile=unsafe), patch.dict(settings, profile=unsafe), self.assertRaisesRegex(ValueError, 'cannot contain'):
+                    package.main(self.root)
+            with patch.dict(settings, password_file=self.password()), self.assertRaisesRegex(ValueError, 'leave password_file null'):
+                package.main(self.root)
+        slow = bin_dir / 'slow.bat'
+        slow.write_text('@"' + sys.executable + '" -c "import time; time.sleep(30)"\n')
+        with self.assertRaisesRegex(ValueError, 'timed out'):
+            package.sign_windows([str(slow)], timeout=1)
+
     def test_public_check_reads_index_and_history(self):
         for name in ['scripts/check-public.py', 'scripts/font_assets.py', 'scripts/local_config.py', 'scripts/private_files.py',
                      'app/assets/fonts/SOURCES.json', 'app/assets/manrope.woff2', 'app/assets/manrope-OFL.txt',
-                     'app/assets/fonts/geist/OFL.txt', 'app/assets/fonts/newsreader/OFL.txt']:
+                     'app/assets/fonts/geist/OFL.txt', 'app/assets/fonts/newsreader/OFL.txt', 'app/assets/fonts/ibm-plex-sans-arabic/OFL.txt']:
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(b'[]' if name.endswith('SOURCES.json') else (ROOT / name).read_bytes())
@@ -291,6 +352,7 @@ with zipfile.ZipFile(target, 'a') as archive:
         git('-c', 'user.name=Offline Test', '-c', 'user.email=offline@example.invalid', 'commit', '-qm', 'Rename fixture')
         self.assertIn('reachable Git history: old-store.pfx', check().stderr)
 
+    @posix_only
     def test_signing_rejects_prompts_and_times_out(self):
         cli = self.root / 'fake-sdk'
         cli.write_text('#!' + sys.executable + '\nprint("Password:", end="", flush=True)\ninput()\n')
@@ -311,7 +373,7 @@ with zipfile.ZipFile(target, 'a') as archive:
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT / name).read_bytes())
-        sdb = self.root / '.local/sdk/tools/sdb'
+        sdb = self.root / ('.local/sdk/tools/sdb.exe' if WINDOWS else '.local/sdk/tools/sdb')
         sdb.parent.mkdir(parents=True)
         marker = self.root / 'sdb-called'
         sdb.write_text('#!' + sys.executable + '\nfrom pathlib import Path\nPath(' + repr(str(marker)) + ').touch()\n')
