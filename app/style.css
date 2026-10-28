@@ -633,3 +633,148 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .l-list .quiet-utils.is-text .u-content>*+*{margin-left:0;margin-right:0}
 .quiet-utils.is-text .u-content>*+*{margin-left:0}
 .l-list .quiet-utils.is-text .u .u-content>*+*{margin-right:0}
+
+/* ---------- Home widgets: date, prayer times and headlines ---------- */
+/* Date and prayer lines share the clock's column, ink and offline-measured region. */
+.caption>.info{margin-top:8px}
+.info{display:flex;flex-direction:column;font-size:30px;line-height:40px;font-weight:500;letter-spacing:-.2px;white-space:nowrap;text-shadow:0 1px 2px rgba(14,10,6,.44),0 2px 12px rgba(14,10,6,.36)}
+.info>*+*{margin-top:2px}
+.info-date{opacity:.92}
+/* Reviewed on all fifteen photos: the smaller times stay near full strength; weight marks the next prayer. */
+.info-times{display:flex;margin-top:6px;font-size:26px;line-height:34px;letter-spacing:0}
+.info-time{opacity:.86}
+.info-time.is-next{opacity:1;font-weight:600}
+.info-times>*+*{margin-left:28px}
+.l-list .info{align-items:flex-end}
+.font-custom .home .info,.font-custom .home .news-body{font-family:var(--font-ui-family),sans-serif;font-weight:var(--font-ui-weight)}
+.bg-dark .info,.bg-light .info{color:var(--ink);opacity:.82;text-shadow:none}
+/* A soft photo shade under the date and prayer lines, like the clock's own; a light halo where the measured ink is dark. */
+.info-dim{position:absolute;left:0;top:0;width:1920px;height:1080px;display:none;pointer-events:none;background:radial-gradient(ellipse 540px 170px at 500px 210px,rgba(10,8,6,.34),rgba(10,8,6,.2) 55%,rgba(10,8,6,0))}
+.bg-photo.has-info .info-dim{display:block}
+.l-list .info-dim{background:radial-gradient(ellipse 540px 170px at 1420px 250px,rgba(10,8,6,.34),rgba(10,8,6,.2) 55%,rgba(10,8,6,0))}
+.adaptive-tl-dark.l-dock .info-dim{background:radial-gradient(ellipse 540px 170px at 500px 210px,rgba(255,252,248,.18),rgba(255,252,248,.1) 55%,rgba(255,252,248,0))}
+.tr-dark.l-list .info-dim{background:radial-gradient(ellipse 540px 170px at 1420px 250px,rgba(255,252,248,.18),rgba(255,252,248,.1) 55%,rgba(255,252,248,0))}
+.bg-photo.l-list .caption .info{color:var(--tr-ink);text-shadow:var(--tr-shadow)}
+.bg-photo.l-list.has-clock-ink .caption .info{color:var(--clock-ink);text-shadow:none}
+.bg-photo.l-dock.has-dock-clock-ink .caption .info{color:var(--dock-clock-ink);text-shadow:none}
+.bg-photo.has-adaptive-ink.l-list .caption .info{color:var(--tr-clock-ink)}
+.bg-photo.has-adaptive-ink.l-dock .caption .info{color:var(--tl-clock-ink)}
+.bg-photo.has-adaptive-ink.l-list.tr-dark .caption .info{text-shadow:var(--tr-shadow)}
+.bg-photo.has-adaptive-ink.l-dock.adaptive-tl-dark .caption .info{text-shadow:var(--tl-shadow)}
+/* Headlines sit on a registered glass card, legible on any photograph without live blur. */
+.news{position:absolute;z-index:2;left:1168px;top:208px;width:640px;display:none;pointer-events:none}
+.news.is-on{display:block}
+.news-plate{position:absolute;top:0;right:0;bottom:0;left:0;border-radius:32px;overflow:hidden;transform:translateZ(0);box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
+.news .ph-veil{background:rgba(12,10,8,.34)}
+.tone-light .news .ph-veil{background:rgba(12,10,8,.42)}
+.m-tint .news .ph-veil{background:linear-gradient(180deg,rgba(14,12,10,.46),rgba(14,12,10,.54))}
+.bg-photo.m-none .news .ph-field,.bg-photo.m-none .news .ph-veil{display:block}
+.bg-dark .news-plate,.bg-light .news-plate{background:var(--plate);box-shadow:var(--plate-edge)}
+.bg-dark .news .ph-field,.bg-light .news .ph-field,.bg-dark .news .ph-veil,.bg-light .news .ph-veil{display:none}
+.news-body{position:relative;padding:24px 32px 28px;color:#f6f1e7}
+.bg-light .news-body{color:var(--ink)}
+.news-head{display:flex;align-items:baseline;justify-content:space-between;font-size:24px;line-height:32px;font-weight:500;opacity:.72;white-space:nowrap}
+.news-head>*+*{margin-left:24px}
+.news-list{list-style:none;margin-top:14px}
+.news-item{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:28px;line-height:38px;font-weight:500}
+.news-item+.news-item{margin-top:16px;padding-top:16px;border-top:1px solid rgba(246,241,231,.16)}
+.bg-light .news-item+.news-item{border-top-color:var(--line)}
+.news-error{margin-top:12px;font-size:26px;line-height:36px;opacity:.8}
+
+/* Settings overview: six groups are visible; the window scrolls with focus. */
+.settings-overview{height:712px;overflow:hidden}
+.settings-overview-in{position:absolute;left:0;top:0;width:100%;transition:transform var(--t) var(--ease)}
+.settings-before,.settings-after{left:620px}
+.settings-before{top:164px}
+.settings-after{top:926px}
+.detail-language .appearance-rows,.detail-city .appearance-rows,.detail-news .appearance-rows{top:260px}
+.detail-news .setting-choice{min-height:88px}
+.detail-widgets .setting-section+.setting-section{margin-top:28px}
+.detail-city .setting-section+.setting-section{margin-top:8px}
+@media(prefers-reduced-motion:reduce){.settings-overview-in{transition:none}}
+
+/* ---------- Arabic: right to left ---------- */
+/* Home mirrors together with its photo, so each offline-measured region, glass field and scrim stays
+   registered. Text, logos and icons turn back inside the caption, controls, empty states and .flip wrappers. */
+.lang-ar,.lang-ar button{font-family:"Study Plex Arabic",Manrope,Arial,sans-serif}
+.lang-ar .home .error-chip,.lang-ar .home .cap-line:not(.full-name){font-family:"Study Plex Arabic",Manrope,Arial,sans-serif}
+/* Tracking breaks the joins of cursive Arabic letters. */
+.lang-ar,.lang-ar *{letter-spacing:0!important}
+.rtl .bg,.rtl .home{transform:scaleX(-1)}
+.flip{display:block}
+.tile-content>.flip,.ph-group>.flip{position:absolute;top:0;right:0;bottom:0;left:0}
+.rtl .flip,.rtl .caption,.rtl .utils,.rtl .dock-empty,.rtl .ph-empty,.rtl .dock-action>span,.rtl .ph-action>span{transform:scaleX(-1)}
+.rtl .clock{direction:ltr;unicode-bidi:isolate;align-self:flex-start}
+.rtl.l-list .clock{align-self:flex-end}
+.rtl.l-list .caption{text-align:left}
+/* App names take their own direction from their first letter, so "Disney+" keeps its plus sign. */
+.rtl .tile .label,.rtl .ph-name,.rtl .app-focus-name .flip,.rtl .cap-line,.rtl .gt .label,.rtl .er-text,.rtl .eo-text,.rtl .msg-title{unicode-bidi:plaintext}
+.rtl .caption .cap-line{text-align:right}
+.rtl.l-list .caption .cap-line{text-align:left}
+.rtl .ph-group .mark{left:auto;right:28px}
+.rtl .ph-name{left:auto;right:128px}
+.rtl .ph-list.is-compact .ph-name{left:auto;right:100px}
+.rtl.a-text .ph-name,.rtl.a-text .ph-list.is-compact .ph-name{left:auto;right:28px}
+.rtl.l-list .quiet-utils .u-content{transform-origin:0 50%}
+.rtl .quiet-utils.is-both .u[data-action="util.settings"]{padding-right:14px;padding-left:15px}
+/* Settings and panels mirror their layout directly; the Home preview moves to the left. */
+.rtl button{text-align:right}
+.rtl.at-appearance .scene,.rtl.at-wallpaper .scene{transform:translate3d(140.4px,288px,0) scale(.48)}
+.rtl .sheet-bg{transform:scaleX(-1)}
+.rtl .settings-back{left:auto;right:124px}
+.rtl .settings-title,.rtl .appearance-rows,.rtl .appearance-desc,.rtl .settings-overview-hint,.rtl .s-title,.rtl .s-sub,.rtl .s-label,.rtl .msg-title,.rtl .msg-line,.rtl .msg-note,.rtl .ed-order-break{left:auto;right:140px}
+.rtl .settings-status{left:140px}
+.rtl .settings-overview,.rtl .msg-acts,.rtl .ed-home{left:auto;right:112px}
+.rtl .settings-before,.rtl .settings-after{left:1260px}
+.rtl .s-head{right:auto;left:112px}
+.rtl .z-other{left:auto;right:1068px}
+.rtl .ed-other-view{left:auto;right:1040px}
+.rtl .ed-origin{left:auto;right:96px}
+.rtl .editor-before,.rtl .editor-after{left:480px}
+.rtl .eo-sep{left:auto;right:28px}
+.rtl .setting-back .ico,.rtl .settings-group>.ico,.rtl .setting-forward,.rtl [data-action="editor.undo"] .ico{transform:scaleX(-1)}
+.rtl .btn{padding:0 24px 0 30px}
+.rtl .settings-group{padding:12px 28px 12px 32px}
+.rtl .er-name{padding:0 16px 0 24px}
+.rtl .eo{padding:0 24px 0 16px}
+.rtl .er-num{text-align:left}
+.rtl .er-name .panel-content,.rtl .eo .panel-content{transform-origin:100% 50%}
+.rtl .detail-background .section-rotation .setting-choice{padding-left:24px;padding-right:128px}
+.rtl .s-count,.rtl .cap-count{margin-left:0;margin-right:20px}
+.rtl .setting-swatch,.rtl .wallpaper-thumb{margin-right:0;margin-left:8px}
+.rtl .er-move,.rtl .eo-verb,.rtl .setting-forward{margin-left:0;margin-right:auto}
+/* The child-margin rules above, mirrored in the same order. */
+.rtl .warn>*+*{margin-left:0;margin-right:12px}
+.rtl .utils>*+*{margin-left:0;margin-right:8px}
+.rtl .quiet-utils>*+*{margin-left:0;margin-right:20px}
+.rtl .quiet-utils.is-icons>*+*{margin-left:0;margin-right:16px}
+.rtl .s-head>*+*{margin-left:0;margin-right:12px}
+.rtl .btn>*+*{margin-left:0;margin-right:12px}
+.rtl .gt .state>*+*{margin-left:0;margin-right:8px}
+.rtl .er-name .panel-content>*+*,.rtl .eo .panel-content>*+*{margin-left:0;margin-right:20px}
+.rtl .er-name .panel-content>.er-move{margin-left:0;margin-right:auto;padding-left:0;padding-right:20px}
+.rtl .eo .panel-content>.eo-verb{margin-left:0;margin-right:auto;padding-left:0;padding-right:20px}
+.rtl .settings-group>.ico{margin-left:0;margin-right:32px}
+.rtl .settings-overview-hint>*+*{margin-left:0;margin-right:16px}
+.rtl .er>*+*{margin-left:0;margin-right:8px}
+.rtl .ed-order-break::after{margin-left:0;margin-right:16px}
+.rtl .msg-acts>*+*{margin-left:0;margin-right:12px}
+.rtl.l-list .quiet-utils>*+*{margin-left:0;margin-right:0}
+.rtl .u-content>*+*{margin-left:0;margin-right:12px}
+.rtl .quiet-utils .u-content>*+*{margin-left:0;margin-right:10px}
+.rtl.l-list .quiet-utils .u-content>*+*{margin-right:0;margin-left:17.9px}
+.rtl.l-list .quiet-utils .u[data-action="util.settings"] .u-content>*+*{margin-right:0;margin-left:18.9px}
+.rtl .setting-choice>*+*{margin-left:0;margin-right:16px}
+.rtl .setting-choice>.setting-forward{margin-left:0;margin-right:auto;padding-left:0;padding-right:16px}
+.rtl .is-horizontal .setting-options>*+*{margin-left:0;margin-right:12px}
+.rtl .is-horizontal .setting-choice>*+*{margin-left:0;margin-right:16px}
+.rtl .setting-choice.setting-back>*+*{margin-left:0;margin-right:8px}
+.rtl .appearance-desc>*+*{margin-left:0;margin-right:16px}
+.rtl .wallpaper-preview-name>*+*{margin-left:0;margin-right:24px}
+.rtl .quiet-utils.is-text>*+*{margin-left:0;margin-right:28px}
+.rtl.l-list .quiet-utils.is-text>*+*{margin-right:0}
+.rtl.l-list .quiet-utils.is-text .u-content>*+*{margin-left:0;margin-right:0}
+.rtl .quiet-utils.is-text .u-content>*+*{margin-right:0}
+.rtl.l-list .quiet-utils.is-text .u .u-content>*+*{margin-left:0}
+.rtl .info-times>*+*{margin-left:0;margin-right:28px}
+.rtl .news-head>*+*{margin-left:0;margin-right:24px}

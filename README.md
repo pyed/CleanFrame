@@ -32,6 +32,7 @@ The public preview uses the included Manrope, Geist and Newsreader fonts.
 - Adjust typography, focus and glass materials through the same Settings interface.
 - Choose and reorder Home apps; discover installed apps on the TV.
 - Select from fifteen wallpapers and save your preferences locally.
+- Switch to Arabic for a mirrored right-to-left Home with Hijri and Gregorian dates, prayer times and optional headlines.
 
 The glass and blur are rendered ahead of time. The TV loads the finished images and uses transforms and opacity for focus feedback.
 

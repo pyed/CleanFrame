@@ -1,8 +1,8 @@
 """Build the exact private-font overlay used by preview and local packaging.
 
-Pangram binaries remain in ignored .local/ storage. A public checkout ships
-Manrope, Geist and Newsreader. Complete local Pangram pairs are added directly
-to the widget ZIP; they are never copied into app/.
+Pangram and Thmanyah binaries remain in ignored .local/ storage. A public
+checkout ships Manrope, Geist, Newsreader and IBM Plex Sans Arabic. Complete
+local pairs are added directly to the widget ZIP; they are never copied into app/.
 """
 from pathlib import Path
 import json
@@ -29,7 +29,30 @@ PRIVATE_FONTS = [
         'files': [('PPPangramSans-Light.ttf', 300), ('PPPangramSans-Regular.ttf', 400)],
         'metrics': 'size-adjust:101.408451%;ascent-override:105.119444%;descent-override:29.583333%;line-gap-override:0%',
     },
+    # Thmanyah's licence forbids redistribution: each owner downloads the files from
+    # font.thmanyah.com. Names without an extension accept the .otf, .ttf or web formats.
+    {
+        'id': 'thmanyah', 'family': 'Study Thmanyah', 'folder': 'thmanyah',
+        'files': [('thmanyahsans-Regular', 400), ('thmanyahsans-Medium', 500)],
+        'metrics': '',
+    },
+    {
+        'id': 'thmanyahserif', 'family': 'Study Thmanyah Serif', 'folder': 'thmanyah',
+        'files': [('thmanyahserifdisplay-Regular', 400), ('thmanyahserifdisplay-Medium', 500)],
+        'metrics': '',
+    },
 ]
+FONT_FORMATS = {'.otf': 'opentype', '.ttf': 'truetype', '.woff2': 'woff2', '.woff': 'woff'}
+
+
+def font_file(folder, name):
+    """A complete file name, or the first font format present for an extensionless name."""
+    if Path(name).suffix.lower() in FONT_FORMATS:
+        return folder / name
+    for suffix in FONT_FORMATS:
+        if (folder / (name + suffix)).is_file():
+            return folder / (name + suffix)
+    return folder / (name + '.otf')
 
 
 def is_runtime_source(name):
@@ -49,16 +72,17 @@ def font_overlay(root=ROOT, include_private=True):
     css = ['/* Local font overlay. Proprietary binaries are not part of app/. */']
     if include_private:
         for font in PRIVATE_FONTS:
-            files = [(sources / font['folder'] / name).resolve() for name, _ in font['files']]
+            names = [font_file(sources / font['folder'], name) for name, _ in font['files']]
+            files = [path.resolve() for path in names]
             # Exclude incomplete pairs and symlinks that leave the private font folder.
             if not all(path.is_relative_to(sources) and path.is_file() for path in files):
                 continue
             private_ids.append(font['id'])
-            for (name, weight), source in zip(font['files'], files):
-                relative = font['folder'] + '/' + name
+            for (_, weight), name, source in zip(font['files'], names, files):
+                relative = font['folder'] + '/' + name.name
                 assets['assets/private-fonts/' + relative] = source
                 css.append("@font-face{font-family:'" + font['family'] + "';font-style:normal;"
-                           'font-weight:' + str(weight) + ";src:url('private-fonts/" + relative + "') format('truetype');"
+                           'font-weight:' + str(weight) + ";src:url('private-fonts/" + relative + "') format('" + FONT_FORMATS[name.suffix.lower()] + "');"
                            'font-display:block;' + font['metrics'] + '}')
     assets['assets/private-fonts.css'] = ('\n'.join(css) + '\n').encode()
     assets['assets/font-catalog.js'] = ('window.CleanFramePrivateFontIDs = '

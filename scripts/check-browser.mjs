@@ -20,7 +20,21 @@ const CATALOG = IDS.map((id, i) => ({ id, name: NAMES[i], show: true, iconPath: 
 const walls = JSON.parse(readFileSync(root + 'app/assets/wallpapers/SOURCES.json', 'utf8'));
 const out = root + '.local/qa/';
 mkdirSync(out, { recursive: true });
-const sourceFiles = ['app/main.js', 'app/device.js', 'app/index.html', 'app/style.css', 'app/config.xml', 'app/assets/wallpapers/SOURCES.json', 'app/assets/wallpapers/catalog.js', 'app/assets/adaptive-ink.js', 'app/assets/icons/metrics.js'];
+const sourceFiles = ['app/main.js', 'app/device.js', 'app/index.html', 'app/style.css', 'app/config.xml', 'app/assets/wallpapers/SOURCES.json', 'app/assets/wallpapers/catalog.js', 'app/assets/adaptive-ink.js', 'app/assets/icons/metrics.js', 'app/i18n.js', 'app/almanac.js', 'app/news.js', 'app/assets/hijri.js'];
+// Arabic headlines come from a fixture feed: no section reaches a real news source.
+const FEED_HOSTS = ['arabic.cnn.com', 'www.skynewsarabia.com', 'aawsat.com', 'rss.dw.com'];
+const NEWS_TITLES = ['الخبر الأول: "عاجل" اليوم', 'الخبر الثاني', 'الخبر الثالث', 'الخبر الرابع'];
+const NEWS_FEED = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>QA</title>'
+  + [[2, NEWS_TITLES[2]], [0, 'الخبر الأول: <b>&quot;عاجل&quot;</b> اليوم<img src=x onerror="window.__newsXss=1">'], [3, NEWS_TITLES[3]], [1, NEWS_TITLES[1]]]
+    .map(([age, title]) => '<item><title><![CDATA[' + title + ']]></title><pubDate>' + new Date(Date.UTC(2026, 9, 28, 8) - age * 600000).toUTCString() + '</pubDate></item>').join('')
+  + '</channel></rss>';
+async function routeFeeds(p, requests = [], failing = () => false) {
+  for (const host of FEED_HOSTS) await p.route('https://' + host + '/**', route => {
+    requests.push(route.request().url());
+    if (failing(route.request().url())) return route.abort('failed');
+    return route.fulfill({ status: 200, contentType: 'application/rss+xml; charset=utf-8', headers: { 'access-control-allow-origin': '*' }, body: NEWS_FEED });
+  });
+}
 const hashes = () => Object.fromEntries(sourceFiles.map(f => [f, createHash('sha256').update(readFileSync(root + f)).digest('hex')]));
 const report = { scope: 'Production UI in Chromium; mock public Tizen API only; no TV contacted.', sourceBefore: hashes(), checks: [], failures: [], pageErrors: [], expectedNetworkFailures: [] };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -100,7 +114,7 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
   };
 }
 async function page(options = {}, setup) {
-  current = await preview.browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  current = await preview.browser.newPage({ viewport: { width: 1920, height: 1080 }, ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}) });
   const owner = current;
   current.setDefaultTimeout(10000);
   const expected = [];
@@ -206,6 +220,42 @@ const wallpaperListGeometry = () => current.evaluate(() => {
 async function editor() { await scene('settings'); await act('settings.editor'); await current.waitForFunction(() => document.querySelector('[data-action^="editor.move."]')); await current.waitForFunction(() => !ShoreQA.state().catalog.loading); }
 async function remove(id) { await act('editor.move.' + id); await nav('back', 'right', 'ok'); }
 async function library() { await scene('home'); await act('util.apps'); await current.waitForFunction(() => !ShoreQA.state().catalog.loading); }
+/* The last two Settings groups sit below the six-row window, so reach them by remote. */
+async function settingsGroup(name) {
+  const order = { widgets: 6, language: 7 }[name];
+  await scene('settings'); await nav(...Array(7).fill('up'), ...Array(order).fill('down'), 'ok');
+  await current.waitForFunction(expected => ShoreQA.state().settingsGroup === expected, name);
+}
+async function language(value) { await settingsGroup('language'); await choice('lang', value); await ready(); }
+/* Positions in the 1920 x 1080 stage, as the viewer sees them. */
+const stageBox = selector => current.evaluate(selector => {
+  const stage = document.getElementById('stage').getBoundingClientRect(), scale = stage.width / 1920, e = document.querySelector(selector);
+  if (!e) return null;
+  const r = e.getBoundingClientRect();
+  return { left: (r.left - stage.left) / scale, right: (r.right - stage.left) / scale, top: (r.top - stage.top) / scale, bottom: (r.bottom - stage.top) / scale };
+}, selector);
+async function homeGeometry() {
+  const dock = (await state()).dock;
+  return { clock: await stageBox('#caption .clock'), utils: await stageBox('#utils'), first: await stageBox('[data-action="home.app.' + dock[0] + '"] .mark'), second: await stageBox('[data-action="home.app.' + dock[1] + '"] .mark') };
+}
+/* An even number of mirrors between an element and the stage means it reads normally. */
+const readsNormally = selector => current.evaluate(selector => [...document.querySelectorAll(selector)].filter(e => e.getClientRects().length).every(e => {
+  let mirrors = 0;
+  for (let node = e; node && node.id !== 'stage'; node = node.parentElement) if (getComputedStyle(node).transform.startsWith('matrix(-')) mirrors++;
+  return mirrors % 2 === 0;
+}), selector);
+const homeInfo = () => current.evaluate(() => ({
+  date: document.querySelector('#caption .info-date')?.textContent || null,
+  next: document.querySelector('#caption .info-next')?.textContent || null,
+  times: [...document.querySelectorAll('#caption .info-time')].map(e => e.textContent.replace(/\s+/g, ' ').trim()),
+  highlighted: document.querySelector('#caption .info-time.is-next')?.textContent.replace(/\s+/g, ' ').trim() || null,
+  clock: document.querySelector('#caption .clock').textContent.trim()
+}));
+const newsCard = () => current.evaluate(() => {
+  const card = document.getElementById('news');
+  return { on: card.classList.contains('is-on') && card.getClientRects().length > 0, source: card.querySelector('.news-source')?.textContent || null,
+    items: [...card.querySelectorAll('.news-item')].map(e => e.textContent), error: card.querySelector('.news-error')?.textContent || null, images: card.querySelectorAll('img:not(.ph-field-img)').length };
+});
 async function noLiveFilters() {
   return current.evaluate(() => [...document.querySelectorAll('#stage, #stage *')].filter(e => e.getClientRects().length).map(e => {
     const s = getComputedStyle(e); return { tag: e.tagName, cls: e.className, filter: s.filter, backdrop: s.backdropFilter || s.webkitBackdropFilter || 'none' };
@@ -387,7 +437,7 @@ try {
         const scale = document.getElementById('stage').getBoundingClientRect().width / 1920;
         return elements.map(e => (e.querySelector('.ico').getBoundingClientRect().left - e.querySelector('.settings-group-copy').getBoundingClientRect().right) / scale);
       });
-      check('Settings group arrows stay separate from their copy at ' + width, groups.length === 6 && groups.every(gap => gap >= 31.5), groups);
+      check('Settings group arrows stay separate from their copy at ' + width, groups.length === 8 && groups.every(gap => gap >= 31.5), groups);
       await wallpaper();
       const caption = await current.locator('.wallpaper-preview-name').evaluate(e => {
         const scale = document.getElementById('stage').getBoundingClientRect().width / 1920;
@@ -1025,6 +1075,174 @@ try {
     check('Browser launch honestly requires TV', /TV/.test(await current.locator('#stage').innerText()));
     await nav('back'); await library();
     check('Browser All Apps has no installed fixtures', /TV/.test(await current.locator('#stage').innerText()) && !(await current.locator('[data-action^="apps.open."]').count()));
+  });
+  await run('Language and widget preferences migrate safely', async () => {
+    const requests = [];
+    await page();
+    const s = await state(), saved = await stored();
+    check('Earlier preferences gain English with the date and Riyadh prayer times', s.lang === 'en' && s.date === 'show' && s.prayer === 'show' && s.city === 'riyadh' && s.news === 'cnn' && s.display.dir === 'ltr', s);
+    check('New choices are stored beside the existing keys', saved.look.lang === 'en' && saved.look.arfont === 'plexar' && saved.city === 'riyadh' && same(saved.dock, PRIMARY) && saved.version === 2, saved);
+    await closePage();
+    await page({ seed: { ...baseline(), look: { lang: 'xx', arfont: 'constructor' }, date: 'maybe', prayer: 1, city: '__proto__', news: 'elsewhere' } }, p => routeFeeds(p, requests));
+    const bad = await state();
+    check('Invalid language and widget values recover their defaults', bad.lang === 'en' && bad.arfont === 'plexar' && bad.date === 'show' && bad.prayer === 'show' && bad.city === 'riyadh' && bad.news === 'cnn', bad);
+    await closePage();
+    await page({ seed: baseline({ look: { lang: 'ar', arfont: 'thmanyah' } }) }, p => routeFeeds(p, requests));
+    const ar = await state();
+    check('A saved local-only Arabic face falls back to the bundled Arabic font', ar.lang === 'ar' && ar.arfont === 'plexar' && ar.display.dir === 'rtl' && ar.fonts.loaded.includes('plexar'), ar);
+  });
+  await run('Arabic switch, mirrored Home and remote direction', async () => {
+    await page({}, p => routeFeeds(p));
+    const english = await homeGeometry();
+    await settingsGroup('language');
+    const before = await state(), offered = await radios();
+    check('Language offers English and Arabic, with English applied', same(offered.map(r => r.action).sort(), ['choice.lang.ar', 'choice.lang.en']) && offered.some(r => r.action === 'choice.lang.en' && r.checked === 'true'), offered);
+    await choice('lang', 'ar'); await ready();
+    const s = await state();
+    check('Arabic applies once with its bundled font', s.lang === 'ar' && s.display.dir === 'rtl' && s.fonts.loaded.includes('plexar') && s.writes === before.writes + 1 && (await stored()).look.lang === 'ar', s);
+    check('Settings speak Arabic as soon as it applies', /[؀-ۿ]/.test(await current.locator('#appearanceTitle').textContent()) && (await state()).focusAction === 'choice.lang.ar');
+    await choice('lang', 'ar');
+    check('Applying Arabic again does not write', (await state()).writes === s.writes);
+    await scene('home');
+    const arabic = await homeGeometry();
+    check('Clock, controls and Dock order mirror', arabic.clock.right > 1700 && arabic.utils.right < 1000 && arabic.first.left > arabic.second.left && english.clock.left < 200 && english.first.left < english.second.left, { english, arabic });
+    check('Photo and Home layer mirror together', await current.evaluate(() => ['bg', 'home'].every(id => getComputedStyle(document.getElementById(id)).transform.startsWith('matrix(-1'))));
+    check('Text, logos and icons read normally', await readsNormally('#caption .clock, #caption .info-date, #utils .u-label, #utils .ico, .tile .label, .tile .mark, #news .news-item'));
+    check('Arabic Home keeps one focus', (await call('where')).focusCount === 1);
+    const start = (await state()).selected;
+    await current.keyboard.press('ArrowLeft');
+    const moved = await state();
+    check('Remote Left selects the next app, shown to its left', moved.selected === moved.dock[moved.dock.indexOf(start) + 1] && (await stageBox('[data-action="home.app.' + moved.selected + '"] .mark')).left < (await stageBox('[data-action="home.app.' + start + '"] .mark')).left, moved.selected);
+    await current.keyboard.press('ArrowRight');
+    check('Remote Right returns to the previous app', (await state()).selected === start);
+    await current.keyboard.press('ArrowUp'); await current.keyboard.press('ArrowLeft');
+    check('Remote Left walks the mirrored controls leftwards', (await state()).focusAction === 'util.apps' && (await stageBox('[data-action="util.apps"]')).left < (await stageBox('[data-action="util.art"]')).left);
+    await current.keyboard.press('ArrowDown');
+    await look({ layout: 'list' }); await scene('home');
+    const list = { clock: await stageBox('#caption .clock'), row: await stageBox('[data-action="home.app.' + start + '"] .ph-name'), utils: await stageBox('#utils') };
+    check('Photo List mirrors: names right, clock and controls left', list.row.right > 1500 && list.clock.left < 300 && list.utils.left < 300, list);
+    check('List names and logos read normally', await readsNormally('.ph-name, .ph-group .mark'));
+    await current.keyboard.press('ArrowLeft');
+    check('In List, remote Left reaches the controls', (await call('where')).zone === 'util' && (await call('where')).focusCount === 1);
+    await current.reload(); await ready();
+    check('Arabic and right-to-left survive reload', (await state()).display.dir === 'rtl' && (await state()).look.lang === 'ar');
+    await look({ layout: 'dock' }); await language('en'); await scene('home');
+    const restored = await homeGeometry();
+    check('English restores the original Home positions', (await state()).display.dir === 'ltr' && Math.abs(restored.clock.left - english.clock.left) < 1 && Math.abs(restored.utils.right - english.utils.right) < 1, { english, restored });
+  });
+  await run('Arabic Settings and panels follow the mirrored layout', async () => {
+    await page({ seed: baseline({ look: { lang: 'ar' } }) }, p => routeFeeds(p));
+    await group('layout');
+    const before = await settingsSnapshot();
+    check('The Home preview sits on the left', (await previewFrame()).x < 300, await previewFrame());
+    await current.keyboard.press('ArrowRight');
+    check('Remote Right focuses the choice to the right without applying it', (await state()).focusAction === 'choice.layout.list' && (await stageBox('[data-action="choice.layout.list"]')).left > (await stageBox('[data-action="choice.layout.dock"]')).left && same(await settingsSnapshot(), before));
+    await nav('back');
+    check('Back returns to the Layout row', (await state()).focusAction === 'settings.group.layout');
+    for (const width of [1920, 1280]) {
+      await current.setViewportSize({ width, height: width * 9 / 16 });
+      for (const [name, child] of [['widgets'], ['widgets', 'widgets.city'], ['widgets', 'widgets.news'], ['language']]) {
+        await settingsGroup(name); if (child) await act(child);
+        const fit = await current.evaluate(() => {
+          const stage = document.getElementById('stage').getBoundingClientRect();
+          return ShoreQA.actions().map(action => {
+            const e = [...document.querySelectorAll('#stage [data-action]')].find(el => el.getAttribute('data-action') === action && el.getClientRects().length), r = e.getBoundingClientRect();
+            return { action, inside: r.left >= stage.left - 1 && r.top >= stage.top - 1 && r.right <= stage.right + 1 && r.bottom <= stage.bottom + 1, fits: e.scrollWidth <= e.clientWidth + 1 && e.scrollHeight <= e.clientHeight + 1 };
+          });
+        });
+        check((child || name) + ' fits ' + width + ' in Arabic', fit.length > 1 && fit.every(f => f.inside && f.fits) && (await call('where')).focusCount === 1, fit);
+        await current.screenshot({ path: out + 'arabic-settings-' + (child || name).replace('.', '-') + '-' + width + '.jpg', quality: 90 });
+      }
+    }
+    await current.setViewportSize({ width: 1920, height: 1080 });
+    await settingsGroup('widgets');
+    check('Widgets offer the date and prayer choices', same((await radios()).map(r => r.action).sort(), ['choice.date.hide', 'choice.date.show', 'choice.prayer.hide', 'choice.prayer.show']));
+    check('City and news sources are reachable in Arabic', (await call('actions')).includes('widgets.city') && (await call('actions')).includes('widgets.news'));
+    await library();
+    const ids = (await state()).catalog.ids;
+    check('All apps fill from the right', (await stageBox('[data-action="apps.open.' + ids[0] + '"]')).left > (await stageBox('[data-action="apps.open.' + ids[1] + '"]')).left);
+    await current.keyboard.press('ArrowDown');
+    check('Down from the header reaches the first app', (await state()).focusAction === 'apps.open.' + ids[0]);
+    await current.keyboard.press('ArrowLeft');
+    check('Remote Left moves to the next app in the grid', (await state()).focusAction === 'apps.open.' + ids[1]);
+    await editor(); const name = (await state()).focusAction;
+    await current.keyboard.press('ArrowLeft');
+    const remove = (await state()).focusAction;
+    check('In the editor, Left reaches Remove from Home on the left', remove === name.replace('editor.move.', 'editor.remove.') && (await stageBox('[data-action="' + remove + '"]')).right < (await stageBox('[data-action="' + name + '"]')).left + 1);
+    await scene('home'); await nav('back');
+    check('Leave Home keeps Stay on the reading side', (await stageBox('[data-action="message.stay"]')).left > (await stageBox('[data-action="message.samsung"]')).left);
+    await current.keyboard.press('ArrowLeft');
+    check('Remote Left reaches Samsung Home', (await state()).focusAction === 'message.samsung');
+    await nav('back');
+    check('Back from the message opens nothing on the TV', (await current.evaluate(() => __tv.calls.length)) === 0 && (await call('where')).view === 'home');
+    check('Arabic panels use pre-rendered materials only', (await noLiveFilters()).length === 0, await noLiveFilters());
+  });
+  await run('Date and Umm al-Qura prayer times', async () => {
+    await page({ timezoneId: 'Asia/Riyadh' }, async p => { await routeFeeds(p); await p.clock.setFixedTime(new Date('2026-10-16T09:00:00+03:00')); });
+    let info = await homeInfo();
+    check('The date shows the Gregorian and Umm al-Qura days', info.date === 'Friday 16 October · 5 Jumada al-Ula 1448 AH', info);
+    check('Riyadh matches the official Umm al-Qura timetable', same(info.times, ['Fajr 4:34', 'Jumuah 11:39', 'Asr 2:58', 'Maghrib 5:26', 'Isha 6:56']), info);
+    check('The next prayer counts down and is highlighted', info.next === 'Jumuah in 2 h 39 min' && info.highlighted === 'Jumuah 11:39', info);
+    check('The clock keeps its 12-hour form', info.clock === '9:00', info.clock);
+    await look({ lang: 'ar' }); info = await homeInfo();
+    check('Arabic date and countdown', info.date === 'الجمعة 16 أكتوبر · 5 جمادى الأولى 1448 هـ' && info.next === 'الجمعة بعد ساعتين و39 دقيقة' && info.highlighted === 'الجمعة 11:39', info);
+    await settingsGroup('widgets'); const before = await state();
+    await choice('date', 'hide');
+    check('Hiding the date writes once', (await state()).date === 'hide' && (await stored()).date === 'hide' && (await state()).writes === before.writes + 1);
+    await choice('date', 'hide');
+    check('Hide again does not write', (await state()).writes === before.writes + 1);
+    await choice('prayer', 'hide');
+    check('Hidden prayer times make the city inactive with a reason', await current.locator('[data-action="widgets.city"]').getAttribute('aria-disabled') === 'true' && (await current.locator('.setting-reason:visible').allTextContents()).some(text => /[؀-ۿ]/.test(text)));
+    await scene('home'); info = await homeInfo();
+    check('With both hidden, only the clock remains', !info.date && !info.next && info.times.length === 0, info);
+    await settingsGroup('widgets'); await choice('prayer', 'show'); await act('widgets.city');
+    check('All twelve cities show at once', (await radios()).filter(r => r.action.startsWith('choice.city.')).length === 12);
+    await current.keyboard.press('ArrowLeft');
+    check('Remote Left moves to the city on the left', (await state()).focusAction === 'choice.city.jeddah' && (await stageBox('[data-action="choice.city.jeddah"]')).left < (await stageBox('[data-action="choice.city.riyadh"]')).left);
+    await choice('city', 'makkah'); await nav('back');
+    check('City Back returns to the Widgets city row', (await state()).settingsGroup === 'widgets' && (await state()).focusAction === 'widgets.city' && (await stored()).city === 'makkah');
+    await current.clock.setFixedTime(new Date('2026-10-06T07:30:00+03:00')); await scene('home'); info = await homeInfo();
+    check('Makkah matches the official Umm al-Qura timetable', same(info.times, ['الفجر 4:58', 'الظهر 12:09', 'العصر 3:32', 'المغرب 6:05', 'العشاء 7:35']) && info.next === 'الظهر بعد 4 ساعات و39 دقيقة', info);
+  });
+  await run('Arabic headlines from the selected source', async () => {
+    const requests = []; let failing = false;
+    await page({}, p => routeFeeds(p, requests, () => failing));
+    await current.waitForTimeout(200);
+    check('English requests no news', requests.length === 0 && !(await newsCard()).on, requests);
+    await look({ lang: 'ar' });
+    await current.waitForFunction(() => ShoreQA.state().headlines.titles.length > 0);
+    let card = await newsCard();
+    check('CNN Arabic is the default source', requests.length === 1 && requests[0].startsWith('https://arabic.cnn.com/') && card.source === 'سي إن إن بالعربية', { requests, card });
+    check('The three newest headlines show as plain text', same(card.items, NEWS_TITLES.slice(0, 3)) && card.images === 0 && !(await current.evaluate(() => window.__newsXss)), card);
+    const box = await stageBox('#news');
+    check('Headlines sit opposite the clock, clear of the Dock', box.right < 960 && box.bottom < (await stageBox('#dock')).top, box);
+    check('The headline card uses pre-rendered glass', (await noLiveFilters()).length === 0 && await current.evaluate(() => document.getElementById('newsFieldImg').naturalWidth > 0));
+    await settingsGroup('widgets'); await act('widgets.news');
+    check('News offers Off and four sources', same((await radios()).map(r => r.action).sort(), ['choice.news.aawsat', 'choice.news.cnn', 'choice.news.dw', 'choice.news.off', 'choice.news.sky']));
+    await choice('news', 'sky');
+    await current.waitForFunction(() => ShoreQA.state().headlines.source === 'sky' && ShoreQA.state().headlines.titles.length > 0);
+    check('Choosing Sky News Arabia fetches it once', requests.filter(url => url.includes('skynewsarabia')).length === 1 && (await stored()).news === 'sky');
+    current.__expectedFailures.push('rss.dw.com'); failing = true;
+    await choice('news', 'dw');
+    await current.waitForFunction(() => !!ShoreQA.state().headlines.error);
+    await scene('home'); card = await newsCard();
+    check('A failed source says so instead of showing another source', card.on && card.items.length === 0 && card.error === 'تعذّر تحميل الأخبار.', card);
+    await settingsGroup('widgets'); await act('widgets.news'); await choice('news', 'off'); await scene('home');
+    const count = requests.length; await current.waitForTimeout(300);
+    check('Off hides the card and stops requests', !(await newsCard()).on && requests.length === count);
+  });
+  await run('Arabic Home fits both target viewports', async () => {
+    await page({ seed: baseline({ look: { lang: 'ar' } }) }, p => routeFeeds(p));
+    await current.waitForFunction(() => ShoreQA.state().headlines.titles.length > 0);
+    const overlaps = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    for (const layout of ['dock', 'list']) for (const width of [1920, 1280]) {
+      await current.setViewportSize({ width, height: width * 9 / 16 }); await look({ layout }); await scene('home');
+      await current.waitForFunction(w => Math.abs(document.getElementById('stage').getBoundingClientRect().width - w) < 1, width);
+      const parts = { caption: await stageBox('#caption'), news: await stageBox('#news'), utils: await stageBox('#utils'), dock: layout === 'dock' ? await stageBox('#dock') : await stageBox('#phPlate.is-current, #phPlateAlt.is-current') };
+      const inside = Object.values(parts).every(r => r && r.left >= 0 && r.top >= 0 && r.right <= 1920 && r.bottom <= 1080);
+      check('Arabic ' + layout + ' keeps widgets inside ' + width + ' without overlaps', inside && !overlaps(parts.caption, parts.news) && !overlaps(parts.news, parts.utils) && !overlaps(parts.news, parts.dock) && !overlaps(parts.caption, parts.utils) && (await call('where')).focusCount === 1, parts);
+      await current.screenshot({ path: out + 'arabic-' + layout + '-' + width + '.jpg', quality: 90 });
+    }
   });
   section = 'Run integrity';
   report.sourceAfter = hashes();

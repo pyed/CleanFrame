@@ -28,6 +28,16 @@
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Misty coast', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
   var ADAPTIVE_INK = window.CleanFrameAdaptiveInk || {};
   WALLS.forEach(function (w) { w.ut = w.ut || { tr: 'light', br: 'light' }; w.frostVeil = w.frostVeil || .12; });
+  /* Arabic text, offline dates and prayer times, and the optional headline feed. English needs none of them. */
+  var STRINGS = window.CleanFrameStrings || {}, ALMANAC = window.CleanFrameAlmanac || null, NEWS = window.CleanFrameNews || null;
+  var CITIES = ALMANAC ? ALMANAC.cities : [], SOURCES = NEWS ? NEWS.sources : [];
+  var NAMES_EN = {
+    days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    hijri: ['Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani', 'Jumada al-Ula', 'Jumada al-Akhirah', 'Rajab', 'Shaban', 'Ramadan', 'Shawwal', 'Dhu al-Qadah', 'Dhu al-Hijjah'],
+    era: 'AH', prayers: { fajr: 'Fajr', dhuhr: 'Dhuhr', jumuah: 'Jumuah', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' }
+  };
+  var NEWS_REFRESH = 15 * 60000, NEWS_RETRY = 2 * 60000, SET_ROW = 120, SET_VISIBLE = 6;
   var MODES = [
     { id: 'fixed', name: 'Fixed', min: 0 }, { id: 'open', name: 'Each time Home opens', min: 0 },
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
@@ -41,12 +51,21 @@
     mori: { name: 'Mori', family: 'Study Mori', display: 200, ui: 400, clock: 200 },
     pangram: { name: 'Pangram Sans', family: 'Study Pangram', display: 300, ui: 400, clock: 300 },
     geist: { name: 'Geist', family: 'Study Geist', display: 300, ui: 400, clock: 300 },
-    newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
+    newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 },
+    /* Arabic faces. Plex is bundled; the Thmanyah faces come only from a local overlay (licence forbids redistribution). */
+    plexar: { name: 'IBM Plex Sans Arabic', family: 'Study Plex Arabic', display: 600, ui: 500, clock: 500, script: 'arabic' },
+    thmanyah: { name: 'Thmanyah Sans', nameAr: 'ثمانية الرقمي', family: 'Study Thmanyah', display: 500, ui: 500, clock: 400, script: 'arabic' },
+    thmanyahserif: { name: 'Thmanyah Serif Display', nameAr: 'ثمانية للعناوين', family: 'Study Thmanyah Serif', display: 500, ui: 500, clock: 400, script: 'arabic' }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontRevision = 0, fontsReady = false;
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] };
-  var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text' };
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: fontList('latin'), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], lang: ['en', 'ar'], arfont: fontList('arabic') };
+  var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material', lang: 'Language', arfont: 'Font' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', show: 'Show', hide: 'Hide', off: 'Off' };
+  /* Saved choices without appearance assets: written directly, like rotation. */
+  var PREF_VALUES = { date: ['show', 'hide'], prayer: ['show', 'hide'], city: CITIES.map(function (c) { return c.id; }), news: ['off'].concat(SOURCES.map(function (s) { return s.id; })) };
+  function fontList(script) {
+    return Object.keys(FONTS).filter(function (id) { return (FONTS[id].script || 'latin') === script && (id === 'manrope' || id === 'plexar' || PRIVATE_FONTS.indexOf(id) >= 0 && !unavailableFonts[id]); });
+  }
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
     leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
@@ -85,8 +104,38 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material }; }
+  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, lang: c.lang, arfont: c.arfont }; }
   function materialApplies(c) { c = c || S.c; return c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
+
+  /* ---------- Language ---------- */
+  /* The displayed language, which changes only once its font is ready. */
+  function lang() { var c = S.shown || S.c; return c && c.lang === 'ar' ? 'ar' : 'en'; }
+  function isAr() { return lang() === 'ar'; }
+  function effFont(c) { return c.lang === 'ar' ? c.arfont : c.font; }
+  function fontAxis() { return isAr() ? 'arfont' : 'font'; }
+  function tx(text, values) {
+    var table = STRINGS[lang()] && STRINGS[lang()].strings, out = table && table.hasOwnProperty(text) ? table[text] : text;
+    return values ? out.replace(/\{(\w+)\}/g, function (all, key) { return values.hasOwnProperty(key) ? String(values[key]) : all; }) : out;
+  }
+  function names() { return isAr() && STRINGS.ar && STRINGS.ar.names || NAMES_EN; }
+  function sep() { return isAr() ? '، ' : ', '; }
+  /* Arabic counted nouns: 1 and 2 use their own forms; 3-10 take the plural; 11+ the singular. */
+  function arCount(n, one, two, few, many) { return n === 1 ? one : n === 2 ? two : n <= 10 ? n + ' ' + few : n + ' ' + many; }
+  function appCount(n) { return isAr() ? arCount(n, 'تطبيق واحد', 'تطبيقان', 'تطبيقات', 'تطبيقًا') : n + (n === 1 ? ' app' : ' apps'); }
+  function duration(minutes) {
+    var h = Math.floor(minutes / 60), m = minutes % 60, hours, mins;
+    if (!isAr()) return (h ? h + ' h' : '') + (h && m ? ' ' : '') + (m || !h ? m + ' min' : '');
+    hours = h ? arCount(h, 'ساعة', 'ساعتين', 'ساعات', 'ساعة') : '';
+    mins = m || !h ? arCount(m, 'دقيقة', 'دقيقتين', 'دقائق', 'دقيقة') : '';
+    return hours + (hours && mins ? ' و' : '') + mins;
+  }
+  function wallName(w) { return tx(w.name); }
+  function fontName(id) { return isAr() && FONTS[id].nameAr || FONTS[id].name; }
+  function cityName(id) { for (var i = 0; i < CITIES.length; i++) if (CITIES[i].id === id) return isAr() ? CITIES[i].ar : CITIES[i].name; return ''; }
+  function newsSource(id) { for (var i = 0; i < SOURCES.length; i++) if (SOURCES[i].id === id) return SOURCES[i]; return null; }
+  function newsName(id) { var s = newsSource(id); return s ? isAr() ? s.ar : s.name : tx('Off'); }
+  /* Remote Left and Right follow the mirrored screen, so logical "previous" stays on the reading side. */
+  function physical(k) { return isAr() && (k === 'left' || k === 'right') ? (k === 'left' ? 'right' : 'left') : k; }
 
   /* ---------- Helpers ---------- */
   function app(id) { for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
@@ -148,7 +197,7 @@
   measureSpan.setAttribute('aria-hidden', 'true');
   measureSpan.style.cssText = 'position:absolute;left:-10000px;top:0;visibility:hidden;white-space:pre;font-synthesis:none;';
   document.body.appendChild(measureSpan);
-  function homeFont() { return S.shown && S.shown.font || 'manrope'; }
+  function homeFont() { return S.shown && effFont(S.shown) || 'manrope'; }
   function fontRole(id, role, size) {
     var f = FONTS[id], serif = id === 'newsreader';
     return { family: f.family,
@@ -180,9 +229,7 @@
     result.digits = widths; result.digitCell = max - min > .02 ? max : 0;
     return result;
   }
-  function fontChoices() {
-    LOOK_VALUES.font = Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0 && !unavailableFonts[id]; });
-  }
+  function fontChoices() { LOOK_VALUES.font = fontList('latin'); LOOK_VALUES.arfont = fontList('arabic'); }
   function retryFontFaces(id) {
     // A rejected CSS FontFace cannot load again. Recreate only that failed family's
     // rules; the displayed family's faces and the rest of the stylesheet stay intact.
@@ -204,7 +251,7 @@
     if (fontMetrics[id]) { done(true); return; }
     if (!document.fonts || !document.fonts.load) { if (id === 'manrope') { fontMetrics.manrope = measureFace('manrope', []); fontsReady = true; done(true); } else done(false, 'unsupported'); return; }
     if (unavailableFonts[id]) retryFontFaces(id);
-    if (id !== 'newsreader' && weights.indexOf(f.ui) < 0) weights.push(f.ui);
+    [f.ui, f.clock].forEach(function (weight) { if (weights.indexOf(weight) < 0) weights.push(weight); });
     function finish(ok, reason, faces) {
       if (ended) return;
       ended = true; clearTimeout(timer);
@@ -240,7 +287,16 @@
         }
         return;
       }
-      if (!ok || id === 'manrope') done(ok, reason); else loadFont(id, done);
+      if (!ok || id === 'manrope') done(ok, reason);
+      else if (FONTS[id].script === 'arabic') ensureArabic(id, done);
+      else loadFont(id, done);
+    });
+  }
+  /* Plex is the Arabic baseline for Settings. If it cannot load, Arabic stays usable with system glyphs. */
+  function ensureArabic(id, done) {
+    loadFont('plexar', function (ok, reason) {
+      if (!ok) { fontMetrics.plexar = measureFace('plexar', []); fontMetrics.plexar.fallback = true; }
+      if (id === 'plexar') done(true, ok ? undefined : reason); else loadFont(id, done);
     });
   }
   function fontShift(role, size) {
@@ -297,7 +353,7 @@
     for (k in map) if (map.hasOwnProperty(k) && !seen[k]) { if (map[k].parentNode === parent) parent.removeChild(map[k]); delete map[k]; }
   }
   function setContent(el, sig, renderContent) {
-    sig += '|' + catalog.revision + '|' + fontRevision;
+    sig += '|' + catalog.revision + '|' + fontRevision + '|' + lang();
     if (el._sig === sig) return;
     el.innerHTML = renderContent();
     el._sig = sig;
@@ -346,7 +402,11 @@
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
-      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
+      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'),
+      // Added after 0.6.1; older preferences gain English with the date and Riyadh prayer times shown.
+      lang: pick(modern.lang, LOOK_VALUES.lang, 'en'), arfont: pick(modern.arfont, LOOK_VALUES.arfont, 'plexar'),
+      date: pick(s.date, PREF_VALUES.date, 'show'), prayer: pick(s.prayer, PREF_VALUES.prayer, 'show'),
+      city: pick(s.city, PREF_VALUES.city, PREF_VALUES.city[0] || 'riyadh'), news: pick(s.news, PREF_VALUES.news, PREF_VALUES.news[1] || 'off')
     };
   }
   function serialise(c) {
@@ -371,7 +431,11 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; return c; }
+  function next(home, recent) {
+    var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode;
+    c.date = S.c.date; c.prayer = S.c.prayer; c.city = S.c.city; c.news = S.c.news;
+    return c;
+  }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -382,11 +446,11 @@
     return true;
   }
   function errText(lifted) {
-    return 'Couldn’t save. Nothing changed.';
+    return tx('Couldn’t save. Nothing changed.');
   }
   function statusHtml(def, lifted) {
     if (S.err) return '<span class="warn error-chip">' + esc(errText(lifted)) + '</span>';
-    return esc(S.note || def);
+    return esc(tx(S.note || def));
   }
 
   function ensureSel() {
@@ -407,7 +471,7 @@
     h = S.c.home.slice(); h.splice(i, 1);
     if (!write(next(h, pushRecent(S.c.recent, id)), 'Remove ' + a.name + ' from Home')) return false;
     S.removedAt[id] = i;
-    S.undo.push({ label: 'Remove ' + a.name, snap: before });
+    S.undo.push({ label: tx('Remove {name}', { name: a.name }), snap: before });
     return true;
   }
   function homeAdd(id) {
@@ -416,13 +480,13 @@
     at = S.removedAt.hasOwnProperty(id) ? Math.min(S.removedAt[id], h.length) : h.length;
     h.splice(at, 0, id);
     if (!write(next(h, without(S.c.recent, id)), 'Add ' + a.name + ' to Home')) return false;
-    S.undo.push({ label: 'Add ' + a.name, snap: before });
+    S.undo.push({ label: tx('Add {name}', { name: a.name }), snap: before });
     return true;
   }
   function homeMove(order, id, before) {
     var a = app(id);
     if (!write(next(order, S.c.recent.slice()), 'Move ' + a.name)) return false;
-    S.undo.push({ label: 'Move ' + a.name, snap: before });
+    S.undo.push({ label: tx('Move {name}', { name: a.name }), snap: before });
     return true;
   }
   function undoLast(arr) {
@@ -430,16 +494,20 @@
     if (!u) { S.note = 'Nothing to undo'; return false; }
     if (!write(next(u.snap.home.slice(), u.snap.recent.slice()), 'Undo ' + u.label)) return false;
     S.undo.pop();
-    S.note = 'Undone: ' + u.label + '.';
+    S.note = tx('Undone: {label}.', { label: u.label });
     return true;
   }
   function undoLabel() { var u = S.undo[S.undo.length - 1]; return u ? u.label : ''; }
-  function undoCaption() { var label = undoLabel(); return label ? 'Undo ' + label.charAt(0).toLowerCase() + label.slice(1) : 'Nothing to undo'; }
+  function undoCaption() {
+    var label = undoLabel();
+    if (!label) return tx('Nothing to undo');
+    return isAr() ? tx('Undo {label}', { label: label }) : 'Undo ' + label.charAt(0).toLowerCase() + label.slice(1);
+  }
   function editStatus(hint, move) {
     if (S.err) return statusHtml('', !!move);
-    if (S.note === FULL || S.note === LAST) return '<span class="warn">' + esc(S.note) + '</span>';
-    if (hint === FULL || hint === LAST) return '<span class="warn">' + esc(hint) + '</span>';
-    return esc(move || hint || S.note || '');
+    if (S.note === FULL || S.note === LAST) return '<span class="warn">' + esc(tx(S.note)) + '</span>';
+    if (hint === FULL || hint === LAST) return '<span class="warn">' + esc(tx(hint)) + '</span>';
+    return esc(tx(move || hint || S.note || ''));
   }
 
   var busy = false, busyTimer = 0;
@@ -452,7 +520,7 @@
     busy = true; busyTimer = setTimeout(release, 10000);
     run(function (err) {
       release();
-      if (err) message(title, err.message || 'The TV could not open this screen.', err.detail || '');
+      if (err) message(title, tx(err.message || 'The TV could not open this screen.'), err.detail ? tx(err.detail) : '');
       render(); syncRotation();
     });
   }
@@ -498,15 +566,16 @@
     return { prev: v ? 'up' : 'left', next: v ? 'down' : 'right', out: v ? 'right' : 'up', inn: v ? 'left' : 'down' };
   }
   function utilAction(u) {
-    if (u === 'art') perform('Art Mode', FrameDevice.art);
+    if (u === 'art') perform(tx('Art Mode'), FrameDevice.art);
     else if (u === 'apps') openApps();
     else openSettings();
   }
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
+  function groupAxis(group) { return { background: 'bg', layout: 'layout', typography: fontAxis(), focus: 'focus', rotation: 'mode', language: 'lang', widgets: 'date', city: 'city', news: 'news' }[group]; }
   function openAppearance(group) {
-    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus' }[group];
-    var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
+    var axis = groupAxis(group);
+    var action = S.detailFocus[group] || (axis === 'mode' ? 'rotation.' + S.c.mode : axis ? 'choice.' + axis + '.' + S.c[axis] : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
   function openMessage(key) { push({ id: 'message', msg: key, f: { b: 0 } }); }
@@ -792,7 +861,7 @@
   function editorRemove(t, id) {
     if (!homeRemove(id)) return;
     t.f.zone = 'other'; t.f.j = otherList().indexOf(id);
-    S.note = app(id).name + ' is in Recently removed. OK puts it back.';
+    S.note = tx('{name} is in Recently removed. OK puts it back.', { name: app(id).name });
   }
   function editorAdd(t, id) {
     rememberOther(t);
@@ -800,7 +869,7 @@
     var remaining = otherList(), at = clamp(t.otherReturn.index, 0, Math.max(0, remaining.length - 1));
     t.otherReturn.id = remaining[at] || null; t.otherReturn.index = at;
     t.f.zone = 'home'; t.f.i = S.c.home.indexOf(id); t.f.part = 'remove';
-    S.note = app(id).name + ' is on Home, position ' + (t.f.i + 1) + '.';
+    S.note = tx('{name} is on Home, position {n}.', { name: app(id).name, n: t.f.i + 1 });
   }
   function editorPlace(t) {
     var L = t.lifted;
@@ -808,20 +877,26 @@
     if (same(L.order, S.c.home)) { t.lifted = null; return; }
     if (!homeMove(L.order.slice(), L.id, L.snap)) return;
     t.lifted = null;
-    S.note = app(L.id).name + ' moved to position ' + (t.f.i + 1) + '.';
+    S.note = tx('{name} moved to position {n}.', { name: app(L.id).name, n: t.f.i + 1 });
   }
   function closeEditor() { clearSession(); pop(); }
 
   /* ---------- Settings, Layout and messages ---------- */
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
-    var n = S.c.home.length;
-    return [{ id: 'background', label: 'Background', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
-      { id: 'layout', label: 'Layout', value: VALUE_NAMES[S.c.layout] },
-      { id: 'typography', label: 'Typography', value: FONTS[S.c.font].name },
-      { id: 'focus', label: 'Focus', value: VALUE_NAMES[S.c.focus] + (materialApplies() ? ', ' + VALUE_NAMES[S.c.material] : '') },
-      { id: 'editor', label: 'Apps on Home', value: n + (n === 1 ? ' app' : ' apps') },
-      { id: 'samsung', label: 'Samsung', value: 'Home and TV settings' }];
+    var n = S.c.home.length, shown = [];
+    if (S.c.date === 'show') shown.push(tx('Date'));
+    if (S.c.prayer === 'show') shown.push(tx('Prayer times'));
+    if (isAr() && S.c.news !== 'off') shown.push(tx('News'));
+    return [{ id: 'background', label: tx('Background'), value: S.c.bg === 'photo' ? wallName(wall(S.c.wall)) : tx(VALUE_NAMES[S.c.bg]) },
+      { id: 'layout', label: tx('Layout'), value: tx(VALUE_NAMES[S.c.layout]) },
+      { id: 'typography', label: tx('Typography'), value: fontName(effFont(S.c)) },
+      { id: 'focus', label: tx('Focus'), value: tx(VALUE_NAMES[S.c.focus]) + (materialApplies() ? sep() + tx(VALUE_NAMES[S.c.material]) : '') },
+      { id: 'editor', label: tx('Apps on Home'), value: appCount(n) },
+      { id: 'samsung', label: tx('Samsung'), value: tx('Home and TV settings') },
+      { id: 'widgets', label: tx('Widgets'), value: shown.length ? shown.join(sep()) : tx('None') },
+      // Both scripts in English, so Arabic stays findable by someone who does not read English.
+      { id: 'language', label: isAr() ? tx('Language') : 'Language · اللغة', value: S.c.lang === 'ar' ? 'العربية' : 'English' }];
   }
   function settingsIds() { return settingsRows().map(function (r) { return r.id; }); }
   V.settings = {
@@ -841,45 +916,69 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung' };
+  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung', widgets: 'Widgets', language: 'Language', city: 'Prayer city', news: 'News source' };
+  function valueLabel(axis, value) {
+    if (axis === 'font' || axis === 'arfont') return fontName(value);
+    if (axis === 'mode') return tx(MODES.filter(function (m) { return m.id === value; })[0].name);
+    if (axis === 'lang') return value === 'ar' ? 'العربية' : 'English';
+    if (axis === 'city') return cityName(value);
+    if (axis === 'news') return newsName(value);
+    return tx(value === 'both' ? 'Both' : VALUE_NAMES[value]);
+  }
   function choice(axis, value, disabled) {
-    return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
-      label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Both' : VALUE_NAMES[value] };
+    return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled, label: valueLabel(axis, value) };
   }
   function detailSections(t) {
-    var flat = S.c.bg !== 'photo', inactive = !materialApplies();
+    var flat = S.c.bg !== 'photo', inactive = !materialApplies(), cities = [], i;
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     if (t.group === 'background') return [
-      { id: 'bg', title: 'Background type', items: options('bg', ['photo', 'light', 'dark']) },
-      { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
-      { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choose Photo to use wallpaper and rotation.' : '' }
+      { id: 'bg', title: tx('Background type'), items: options('bg', ['photo', 'light', 'dark']) },
+      { id: 'wall', title: tx('Wallpaper'), items: [{ action: 'background.wallpaper', label: wallName(wall(S.c.wall)), thumbnail: true, disabled: flat }] },
+      { id: 'rotation', title: tx('Rotation'), items: [{ action: 'background.rotation', label: tx(mode().name), disabled: flat }], reason: flat ? tx('Choose Photo to use wallpaper and rotation.') : '' }
     ];
     if (t.group === 'layout') return [
-      { id: 'layout', title: 'Layout', horizontal: true, items: options('layout', ['list', 'dock']) },
-      { id: 'apps', title: 'App display', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
-      { id: 'controls', title: 'Home controls', horizontal: true, items: options('controls', ['text', 'icons', 'both']) }
+      { id: 'layout', title: tx('Layout'), horizontal: true, items: options('layout', ['list', 'dock']) },
+      { id: 'apps', title: tx('App display'), horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
+      { id: 'controls', title: tx('Home controls'), horizontal: true, items: options('controls', ['text', 'icons', 'both']) }
     ];
-    if (t.group === 'typography') return [{ id: 'font', title: '', items: options('font', LOOK_VALUES.font) }];
+    if (t.group === 'typography') return [{ id: fontAxis(), title: '', items: options(fontAxis(), LOOK_VALUES[fontAxis()]) }];
     if (t.group === 'focus') return [
-      { id: 'focus', title: 'Focus style', horizontal: true, items: options('focus', ['type', 'glass']) },
-      { id: 'material', title: 'Material', horizontal: true, items: options('material', ['soft', 'frost', 'tint'], inactive),
-        reason: inactive ? flat ? 'Materials are available with a Photo background.' : 'Choose Glass focus or the Dock layout to use materials.' : '' }
+      { id: 'focus', title: tx('Focus style'), horizontal: true, items: options('focus', ['type', 'glass']) },
+      { id: 'material', title: tx('Material'), horizontal: true, items: options('material', ['soft', 'frost', 'tint'], inactive),
+        reason: inactive ? flat ? tx('Materials are available with a Photo background.') : tx('Choose Glass focus or the Dock layout to use materials.') : '' }
     ];
     if (t.group === 'rotation') return [{ id: 'mode', title: '', items: options('mode', MODES.map(function (m) { return m.id; }), flat),
-      reason: flat ? 'Choose Photo in Background to use rotation.' : 'Timed changes pause while Settings or another panel is open.' }];
+      reason: flat ? tx('Choose Photo in Background to use rotation.') : tx('Timed changes pause while Settings or another panel is open.') }];
+    if (t.group === 'language') return [{ id: 'lang', title: '', horizontal: true, items: options('lang', LOOK_VALUES.lang) }];
+    if (t.group === 'widgets') return [
+      { id: 'date', title: tx('Date'), horizontal: true, items: options('date', PREF_VALUES.date) },
+      { id: 'prayer', title: tx('Prayer times'), horizontal: true, items: options('prayer', PREF_VALUES.prayer) },
+      { id: 'city', title: tx('Prayer city'), items: [{ action: 'widgets.city', label: cityName(S.c.city), disabled: S.c.prayer !== 'show' || !CITIES.length }],
+        reason: S.c.prayer !== 'show' ? tx('Show prayer times to choose a city.') : '' },
+      { id: 'news', title: tx('News'), items: [{ action: 'widgets.news', label: newsName(S.c.news), disabled: !isAr() || !SOURCES.length }],
+        reason: isAr() ? '' : tx('Headlines appear when the language is Arabic.') }
+    ];
+    if (t.group === 'city') {
+      // Two cities per row keep all twelve on one screen with the usual row navigation.
+      for (i = 0; i < PREF_VALUES.city.length; i += 2) cities.push({ id: 'city-' + i / 2, title: '', horizontal: true, items: options('city', PREF_VALUES.city.slice(i, i + 2)) });
+      cities[cities.length - 1].reason = tx('Times follow the official method for each city.');
+      return cities;
+    }
+    if (t.group === 'news') return [{ id: 'news', title: '', items: options('news', PREF_VALUES.news), reason: tx('Headlines refresh every 15 minutes while Home is visible.') }];
     return [{ id: 'samsung', title: '', items: [
-      { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
-      { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' }
+      { action: 'samsung.home', label: tx('Samsung Home'), description: tx('Open Samsung’s Home screen') },
+      { action: 'samsung.settings', label: tx('TV settings'), description: tx('Picture, sound and network settings') }
     ] }];
   }
+  function parentGroup(t) { return t.group === 'rotation' ? 'Background' : t.group === 'city' || t.group === 'news' ? 'Widgets' : 'Settings'; }
   function detailRows(t) {
-    var rows = [[{ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }]];
+    var rows = [[{ action: 'settings.back', label: tx(parentGroup(t)) }]];
     detailSections(t).forEach(function (section) {
       var enabled = section.items.filter(function (item) { return !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
       else enabled.forEach(function (item) { rows.push([item]); });
     });
-    if (S.lookError) rows.push([{ action: 'settings.retry', label: 'Try again' }]);
+    if (S.lookError) rows.push([{ action: 'settings.retry', label: tx('Try again') }]);
     return rows;
   }
   function detailLocation(t) {
@@ -901,6 +1000,15 @@
     c = next(S.c.home.slice(), S.c.recent.slice()); c.mode = value;
     if (!write(c, 'Wallpaper rotation')) S.lookError = { type: 'save', patch: { mode: value }, row: 'mode', transient: false };
   }
+  /* Widget choices need no assets: one direct write, and a repeated OK does not write again. */
+  function applyPref(axis, value) {
+    var c, patch = {};
+    S.err = null; S.lookError = null;
+    if (value === S.c[axis]) return;
+    c = next(S.c.home.slice(), S.c.recent.slice()); c[axis] = value; patch[axis] = value;
+    if (!write(c, 'Widgets')) S.lookError = { type: 'save', patch: patch, row: axis, transient: false };
+    else syncNews();
+  }
   function detailBack() { cancelLook(); S.err = null; pop(); }
   function detailOk(t, item) {
     var patch = {}, error = S.lookError;
@@ -909,18 +1017,22 @@
     if (item.action === 'settings.retry') {
       if (error && error.patch[error.row] !== undefined) detailFocus(t, choice(error.row, error.patch[error.row]), 0);
       if (error && error.row === 'mode') applyRotation(error.patch.mode);
+      else if (error && PREF_VALUES[error.row]) applyPref(error.row, error.patch[error.row]);
       else if (error) setLook(error.patch, { row: error.row });
     } else if (item.axis === 'mode') applyRotation(item.value);
+    else if (PREF_VALUES[item.axis]) applyPref(item.axis, item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
-    else if (item.action === 'samsung.home') perform('Samsung Home', FrameDevice.home);
-    else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
+    else if (item.action === 'widgets.city') openAppearance('city');
+    else if (item.action === 'widgets.news') openAppearance('news');
+    else if (item.action === 'samsung.home') perform(tx('Samsung Home'), FrameDevice.home);
+    else if (item.action === 'samsung.settings') perform(tx('TV settings'), FrameDevice.settings);
   }
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode' }[t.group];
+      var axis = groupAxis(t.group);
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -957,7 +1069,7 @@
       if (k === 'left') t.f.b = Math.max(0, t.f.b - 1);
       else if (k === 'right') t.f.b = Math.min(A.length - 1, t.f.b + 1);
       else if (k === 'back') pop();
-      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform('Samsung Home', FrameDevice.home); }
+      else if (k === 'ok') { a = A[t.f.b][0]; pop(); if (a === 'samsung') perform(tx('Samsung Home'), FrameDevice.home); }
     },
     point: function (t, z, i) { if (z === 'act') { t.f.b = i; this.key(t, 'ok'); } }
   };
@@ -986,7 +1098,8 @@
   var utPlates = [$('utLens'), $('utLensAlt')], utFields = [$('utField'), $('utFieldAlt')], utPlateIndex = 0, utPlateKey = null;
   var photoMode = null, photoTransitionToken = 0;
   var sheetEl = $('sheet'), sheetView = $('sheetView');
-  var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt') };
+  var newsEl = $('news'), newsField = $('newsField'), newsBody = $('newsBody');
+  var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt'), news: $('newsFieldImg') };
   var sheetKey = '', slotEls = {}, dockEdgeFrame = 0, dockEdgeUntil = 0, dockAnchorCenter = 960;
   var appliedPalette = null, appliedPhoto = null, appliedFont = null, appliedFontMetrics = null;
 
@@ -1018,7 +1131,9 @@
   function render() {
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (isAr() ? ' lang-ar rtl' : '') + (ALMANAC && (S.c.date === 'show' || S.c.prayer === 'show') ? ' has-info' : '');
+    // Arabic mirrors Home with its photo (see style.css), so each offline-measured region keeps its text.
+    if (stage.getAttribute('dir') !== (isAr() ? 'rtl' : 'ltr')) { stage.setAttribute('dir', isAr() ? 'rtl' : 'ltr'); document.documentElement.lang = isAr() ? 'ar' : 'en-AU'; }
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1053,6 +1168,7 @@
     if (S.c.layout === 'list') renderList(hs);
     else { photoMode = null; renderDock(hs); }
     renderAppFocusName(hs);
+    renderNews();
   }
 
   function clockText() {
@@ -1064,8 +1180,28 @@
     if (!metrics || !metrics.digitCell) return text;
     return text.replace(/[0-9]/g, function (digit) { return '<span class="clock-digit">' + digit + '</span>'; });
   }
+  /* Date and prayer lines sit with the clock; both are computed offline and refresh with it each minute. */
+  function dateText(now) {
+    var n = names(), h = ALMANAC.hijri(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    return n.days[now.getDay()] + ' ' + now.getDate() + ' ' + n.months[now.getMonth()] + ' · ' + h.day + ' ' + n.hijri[h.month - 1] + ' ' + h.year + ' ' + n.era;
+  }
+  function prayerName(id, friday) { return names().prayers[id === 'dhuhr' && friday ? 'jumuah' : id]; }
+  function prayerTime(p) { return (p.hour % 12 || 12) + ':' + (p.minute < 10 ? '0' : '') + p.minute; }
+  function infoHtml() {
+    var now = Date.now(), html = '', p;
+    if (!ALMANAC) return '';
+    if (S.c.date === 'show') html += '<span class="info-date">' + esc(dateText(new Date(now))) + '</span>';
+    if (S.c.prayer === 'show') {
+      p = ALMANAC.prayers(now, S.c.city);
+      html += '<span class="info-next">' + esc(tx('{prayer} in {time}', { prayer: prayerName(p.next.id, p.friday && p.list.indexOf(p.next) >= 0), time: duration(Math.ceil((p.next.at - now) / 60000)) })) + '</span>'
+        + '<span class="info-times">' + p.list.map(function (item) {
+          return '<span class="info-time' + (item === p.next ? ' is-next' : '') + '"><span class="info-name">' + esc(prayerName(item.id, p.friday)) + '</span> ' + prayerTime(item) + '</span>';
+        }).join('') + '</span>';
+    }
+    return html ? '<span class="info">' + html + '</span>' : '';
+  }
   function renderCaption(t, hs) {
-    var html = '<span class="clock">' + clockHtml() + '</span>';
+    var html = '<span class="clock">' + clockHtml() + '</span>' + infoHtml();
     if (S.c.apps !== 'icons' && hs.items[hs.i] && (S.c.layout === 'list' ? photoLabel(hs.items[hs.i].id, false).size < 88 || photoLabel(hs.items[hs.i].id, false).ellipsis : hs.zone === 'apps' && reducedDockLabel(hs.items[hs.i].id))) html += '<span class="cap-line full-name">' + esc(app(hs.items[hs.i].id).name) + '</span>';
     setHTML(caption, html);
   }
@@ -1077,7 +1213,7 @@
     var html = '', style = hs.mode === 'arrange' && S.c.controls !== 'text' ? 'both' : S.c.controls;
     var iconsOnly = style === 'icons', U = utils(), focused = null;
     utilsEl.className = 'utils quiet-utils is-' + style + (hs.zone === 'util' || hs.zone === 'ctl' ? ' is-awake' : '');
-    U.forEach(function (u, i) { html += utilBtn('util', i, 'util.' + u, icon(UTIL[u][1], '', true) + '<span class="u-label">' + UTIL[u][0] + '</span>', '', UTIL[u][0]); });
+    U.forEach(function (u, i) { html += utilBtn('util', i, 'util.' + u, icon(UTIL[u][1], '', true) + '<span class="u-label">' + esc(tx(UTIL[u][0])) + '</span>', '', tx(UTIL[u][0])); });
     setHTML(utilsEl, html);
     Array.prototype.forEach.call(utilsEl.querySelectorAll('.u'), function (b) {
       var z = b.getAttribute('data-z'), focus = hs.zone === z && hs.u === Number(b.getAttribute('data-i'));
@@ -1090,22 +1226,24 @@
   function renderUtilFocusLabel(button) {
     var text, key, r, sr, scale, width, x;
     if (!button) { utilFocusLabel.className = 'util-focus-label'; utilFocusKey = ''; return; }
-    text = S.err ? 'Not saved. OK tries again.' : button.getAttribute('aria-label');
+    text = S.err ? tx('Not saved. OK tries again.') : button.getAttribute('aria-label');
     key = button.getAttribute('data-action') + '|' + text + '|' + homeFont();
     if (key !== utilFocusKey) {
-      utilFocusLabel.className = 'util-focus-label'; utilFocusLabel.textContent = text;
+      utilFocusLabel.className = 'util-focus-label'; utilFocusLabel.innerHTML = '<span class="flip">' + esc(text) + '</span>';
       utilFocusLabel.offsetWidth;
       utilFocusKey = key;
     }
     r = button.getBoundingClientRect(); sr = sceneEl.getBoundingClientRect(); scale = sr.width / 1920 || 1;
     width = Math.ceil(textWidth(text, 28, 500, -.2) + 8); x = (r.left + r.width / 2 - sr.left) / scale - width / 2;
+    // Rects are on screen; Home's own coordinates are mirrored in Arabic.
     if (S.c.layout === 'list') x = 1730 - width;
+    else if (isAr()) x = 1920 - x - width;
     utilFocusLabel.style.width = width + 'px'; utilFocusLabel.style.left = clamp(x, 112, 1808 - width) + 'px';
     utilFocusLabel.style.top = ((S.c.layout === 'list' ? (r.top + r.height / 2 - sr.top) / scale - 19 : 140) + fontShift('ui', 28)) + 'px';
     utilFocusLabel.className = 'util-focus-label is-on';
   }
   function renderUtilityLens(button, iconsOnly) {
-    var r, label, sr, scale, x, y, width, key, el;
+    var r, label, edge, sr, scale, x, y, width, key, el;
     if (!button || S.c.focus !== 'glass') {
       utPlates.forEach(function (plateEl) { plateEl.className = 'ph-plate ut-lens is-outgoing'; });
       utPlateKey = null;
@@ -1114,12 +1252,14 @@
     r = button.getBoundingClientRect(); sr = sceneEl.getBoundingClientRect(); scale = sr.width / 1920 || 1;
     y = (r.top - sr.top) / scale + 2;
     if (S.c.layout === 'list') {
-      label = iconsOnly ? utilFocusLabel : button.querySelector('.u-label');
-      x = (label.getBoundingClientRect().left - sr.left) / scale - 24;
+      // The lens reaches from the label to the outer edge; in Arabic that label edge is on screen right.
+      label = iconsOnly ? utilFocusLabel : button.querySelector('.u-label'); edge = label.getBoundingClientRect();
+      x = (isAr() ? 1920 - (edge.right - sr.left) / scale : (edge.left - sr.left) / scale) - 24;
       width = 1800 - x;
     } else {
       // Dock icons keep a fixed lens; the separate caption cannot overlap its neighbours.
       x = (r.left - sr.left) / scale; width = r.width / scale;
+      if (isAr()) x = 1920 - x - width;
     }
     key = button.getAttribute('data-action') + '|' + x + '|' + y + '|' + width;
     if (key !== utPlateKey) {
@@ -1137,7 +1277,7 @@
   function renderAppFocusName(hs) {
     var it = hs.items[hs.i], width, x, y, placement;
     if (S.c.apps !== 'icons' || hs.mode !== 'browse' || hs.zone !== 'apps' || !it) { appFocusName.className = 'app-focus-name'; return; }
-    appFocusName.textContent = app(it.id).name;
+    setHTML(appFocusName, '<span class="flip">' + esc(app(it.id).name) + '</span>');
     width = Math.min(S.c.layout === 'list' ? 1056 : 1640, Math.ceil(textWidth(app(it.id).name, S.c.layout === 'list' ? 40 : 36, 500, -.6, 'primary') + 8));
     appFocusName.style.width = width + 'px';
     if (S.c.layout === 'list') {
@@ -1177,7 +1317,7 @@
   }
   function dockTileHtml(it, full) {
     var a, body;
-    if (it.kind === 'add') return '<span class="add">' + icon('plus') + '</span><span class="label">' + (full ? 'Home is full' : 'Add app') + '</span>';
+    if (it.kind === 'add') return '<span class="add">' + icon('plus') + '</span><span class="label">' + esc(tx(full ? 'Home is full' : 'Add app')) + '</span>';
     a = app(it.id);
     body = S.c.apps === 'text' ? '' : appMark(a, S.c.apps === 'icons' ? 136 : 120, S.c.apps === 'icons' ? 88 : 72, S.c.apps === 'icons' ? 72 : 58);
     return body + (S.c.apps === 'icons' ? '' : '<span class="label" style="font-size:' + dockLabelSize(a.id) + 'px;top:' + ((S.c.apps === 'text' ? 28 : 128) + fontShift('primary', dockLabelSize(a.id))) + 'px"><span class="label-ink">' + esc(a.name) + '</span></span>') + '<span class="nudge nudge-l">' + icon('left') + '</span><span class="nudge nudge-r">' + icon('right') + '</span>';
@@ -1223,7 +1363,7 @@
     keyed(track, empty ? [] : items, function (el, it, i) {
       var a = it.id ? app(it.id) : null, left = i * g.pitch, focus = tileFocus && i === anchor, sel = tileSel && i === anchor;
       var lifted = hs.lifted && i === anchor, partial = g.broad && (left - off < -1 || left + g.tw - off > g.shelf + 1);
-      setContent(el, it.kind + '|' + (it.id || '') + '|' + (it.id ? dockLabelSize(it.id) : full) + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont(), function () { return '<span class="tile-content">' + dockTileHtml(it, full) + '</span>'; });
+      setContent(el, it.kind + '|' + (it.id || '') + '|' + (it.id ? dockLabelSize(it.id) : full) + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont(), function () { return '<span class="tile-content"><span class="flip">' + dockTileHtml(it, full) + '</span></span>'; });
       el.className = 'tile k-' + it.kind + (focus ? ' is-focus' : '') + (sel ? ' is-sel' : '') + (lifted ? ' is-lifted' : '') + (partial ? ' is-partial' : '')
         + (a && !a.mark ? ' is-text' : '') + (it.kind === 'add' && full ? ' is-full' : '') + (it.kind === 'app' && S.press === it.id ? ' is-press' : '')
         + (lifted && i === 0 ? ' no-l' : '') + (lifted && i >= ns - 1 ? ' no-r' : '');
@@ -1250,7 +1390,7 @@
     ax = g.x + 16 + anchor * g.pitch - off;
     if (hs.mode === 'arrange' && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && focusItem && focusItem.kind !== 'add') {
       s = hs.arr.slots[anchor];
-      label = (s.removed ? 'Restore ' : 'Remove ') + app(s.id).name; width = actionWidth(label);
+      label = tx(s.removed ? 'Restore {name}' : 'Remove {name}', { name: app(s.id).name }); width = actionWidth(label);
       ax = clamp(ax + (g.tw - width) / 2, 112, 1808 - width);
       setHTML(dockAction, '<span>' + esc(label) + '</span>');
       dockAction.className = 'dock-action is-on' + (hs.zone === 'act' ? ' is-focus' : '');
@@ -1261,7 +1401,7 @@
       dockAction.className = 'dock-action';
       dockAction.removeAttribute('data-z'); dockAction.removeAttribute('data-action');
     }
-    setHTML(dockEmpty, empty ? '<p>No apps on Home</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>Add apps</span></button>' : '');
+    setHTML(dockEmpty, empty ? '<p>' + esc(tx('No apps on Home')) + '</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>' + esc(tx('Add apps')) + '</span></button>' : '');
   }
 
   function photoModeTransition(compact) {
@@ -1328,7 +1468,7 @@
       setContent(row, it.id + '|' + typography.size + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont(), function () {
         if (S.c.apps !== 'text') body += appMark(app(it.id), S.c.apps === 'icons' ? compact ? 64 : 88 : compact ? 60 : 84, S.c.apps === 'icons' ? compact ? 64 : 88 : compact ? 44 : 64, S.c.apps === 'icons' ? compact ? 52 : 72 : compact ? 42 : 54);
         if (S.c.apps !== 'icons') body += '<span class="ph-name" style="font-size:' + typography.size + 'px;top:' + typography.top + 'px">' + esc(app(it.id).name) + '</span>';
-        return '<span class="ph-group">' + body + '</span><span class="ph-move ph-move-up">' + icon('up') + '</span><span class="ph-move ph-move-down">' + icon('down') + '</span>';
+        return '<span class="ph-group"><span class="flip">' + body + '</span></span><span class="ph-move ph-move-up">' + icon('up') + '</span><span class="ph-move ph-move-down">' + icon('down') + '</span>';
       });
       markImage = row.querySelector('.mark img');
       if (markImage) {
@@ -1348,7 +1488,7 @@
     plateState = !n || hs.zone === null ? '' : hs.lifted ? 'on-lift' : S.c.focus === 'glass' && rowFocus ? 'on-focus' : S.c.focus === 'glass' && remembered ? 'on-sel' : '';
     renderPhotoPlate(items[anchor] ? items[anchor].id : '', width, compact ? 88 : 134, y, plateState);
     if (compact && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && items[anchor]) {
-      s = hs.arr.slots[anchor]; label = (s.removed ? 'Restore ' : 'Remove ') + app(s.id).name; aw = actionWidth(label);
+      s = hs.arr.slots[anchor]; label = tx(s.removed ? 'Restore {name}' : 'Remove {name}', { name: app(s.id).name }); aw = actionWidth(label);
       setHTML(phAction, '<span>' + esc(label) + '</span>');
       phAction.className = 'ph-action is-on' + (hs.zone === 'act' ? ' is-focus' : '');
       phAction.style.width = aw + 'px';
@@ -1356,7 +1496,49 @@
       attrs(phAction, 'act', anchor, 'arrange.' + (s.removed ? 'restore.' : 'remove.') + s.id);
     } else { phAction.className = 'ph-action'; phAction.removeAttribute('data-z'); phAction.removeAttribute('data-action'); }
     phEmpty.className = 'ph-empty' + (!compact && !n ? ' is-on' : '');
-    setHTML(phEmpty, !compact && !n ? '<p>No apps on Home</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>Add apps</span></button>' : '');
+    setHTML(phEmpty, !compact && !n ? '<p>' + esc(tx('No apps on Home')) + '</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>' + esc(tx('Add apps')) + '</span></button>' : '');
+  }
+
+  /* ---------- Headlines (Arabic only) ---------- */
+  /* Card origins in Home's own coordinates; the Arabic mirror moves them to screen left. */
+  var NEWS_BOX = { dock: { x: 1168, y: 208, width: 640 }, list: { x: 1208, y: 360, width: 600 } }, NEWS_SHOWN = 3;
+  var news = { source: null, items: [], loading: false, error: null, fetched: 0, due: 0, request: 0, timer: 0, key: '' };
+  function newsActive() { return !!NEWS && isAr() && S.c.news !== 'off' && !!newsSource(S.c.news); }
+  function renderNews() {
+    var on = newsActive() && (news.items.length > 0 || !!news.error), box = NEWS_BOX[S.c.layout], header, key, d;
+    newsEl.className = 'news' + (on ? ' is-on' : '');
+    if (!on) return;
+    newsEl.style.left = box.x + 'px'; newsEl.style.top = box.y + 'px'; newsEl.style.width = box.width + 'px';
+    fieldTransform(newsField, box.x, box.y, box.width, 360);
+    d = new Date(news.fetched);
+    header = '<span class="news-source">' + esc(newsName(news.source)) + '</span>' + (news.fetched ? '<span class="news-time">' + esc(tx('Updated {time}', { time: (d.getHours() % 12 || 12) + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() })) + '</span>' : '');
+    key = lang() + '|' + header + '|' + (news.items.length ? news.items.slice(0, NEWS_SHOWN).map(function (item) { return item.title; }).join('\n') : news.error);
+    if (key === news.key) return;
+    news.key = key;
+    newsBody.innerHTML = '<div class="flip"><p class="news-head">' + header + '</p>' + (news.items.length
+      ? '<ul class="news-list">' + news.items.slice(0, NEWS_SHOWN).map(function (item) { return '<li class="news-item">' + esc(item.title) + '</li>'; }).join('') + '</ul>'
+      : '<p class="news-error">' + esc(tx(news.error)) + '</p>') + '</div>';
+  }
+  /* Fetch only while Arabic Home can be seen: on change, then every 15 minutes (2 after a failure). */
+  function syncNews() {
+    clearTimeout(news.timer); news.timer = 0;
+    if (!newsActive()) return;
+    if (news.source !== S.c.news) { news.source = S.c.news; news.items = []; news.error = null; news.fetched = 0; news.due = 0; news.request++; news.loading = false; news.key = ''; }
+    if (document.hidden || news.loading) return;
+    if (Date.now() >= news.due) { loadNews(); return; }
+    news.timer = setTimeout(syncNews, news.due - Date.now() + 50);
+  }
+  function loadNews() {
+    var request = ++news.request, source = news.source;
+    news.loading = true;
+    NEWS.load(source, function (err, items) {
+      if (request !== news.request) return;
+      news.loading = false;
+      if (err) { news.error = err.message; news.due = Date.now() + NEWS_RETRY; }
+      else { news.items = items; news.error = null; news.fetched = Date.now(); news.due = news.fetched + NEWS_REFRESH; }
+      if (top().id === 'home' || isSettingsDetail(top())) renderNews();
+      syncNews();
+    });
   }
 
   /* Sheets: a frame is built once per view/mode; fill() updates its slots. Persistent
@@ -1369,7 +1551,7 @@
     else sheetView.removeAttribute('aria-modal');
     sceneEl.setAttribute('aria-hidden', sheet || isSettingsDetail(t) ? 'true' : 'false');
     if (!sheet) { sheetView.innerHTML = ''; sheetKey = ''; return; }
-    key = t.id + '|' + (t.mode || '') + '|' + (t.msg || '') + '|' + S.variant + '|' + S.c.bg;
+    key = t.id + '|' + (t.mode || '') + '|' + (t.msg || '') + '|' + S.variant + '|' + S.c.bg + '|' + lang();
     if (key !== sheetKey) {
       sheetView.innerHTML = FRAMES[t.id](t);
       sheetKey = key; slotEls = {};
@@ -1385,21 +1567,21 @@
     V.appearance.norm(t);
     appearanceEl.className = 'appearance detail-' + t.group;
     appearanceRows.className = 'appearance-rows';
-    appearanceTitle.textContent = DETAIL_NAMES[t.group];
-    var at = detailLocation(t), selected = at.item, error = S.lookError, status = '', hint;
+    appearanceTitle.textContent = tx(DETAIL_NAMES[t.group]);
+    var at = detailLocation(t), selected = at.item, error = S.lookError, status = '', hint, pending;
     function command(item, inner, cls) {
       var applied = item.axis && S.c[item.axis] === item.value;
       var loading = !!(item.axis && S.pending && S.pending.target[item.axis] === item.value && S.pending.row === item.axis);
       return '<button type="button" tabindex="-1" class="setting-choice' + (cls ? ' ' + cls : '') + (t.f.action === item.action ? ' is-focus' : '') + (item.disabled ? ' is-disabled' : '') + (applied ? ' is-applied' : '') + (loading ? ' is-loading' : '') + '"'
-        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? 'Icons and text' : item.label) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
+        + (item.axis ? ' role="radio" aria-checked="' + !!applied + '"' : '') + ' aria-label="' + esc(item.axis && item.value === 'both' ? tx('Icons and text') : item.label) + '" aria-disabled="' + !!item.disabled + '" aria-busy="' + loading + '"'
         + ' data-z="detail" data-i="0" data-id="' + item.action + '" data-action="' + item.action + '">' + inner
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
-    setHTML(appearanceBack, command({ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }, icon('left') + '<span>' + (t.group === 'rotation' ? 'Background' : 'Settings') + '</span>', 'setting-back'));
+    setHTML(appearanceBack, command({ action: 'settings.back', label: tx(parentGroup(t)) }, icon('left') + '<span>' + esc(tx(parentGroup(t))) + '</span>', 'setting-back'));
     setHTML(appearanceRows, detailSections(t).map(function (section) {
       return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + ' section-' + section.id + '">'
-        + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + section.title + '</h3>' : '')
-        + '<div class="setting-options"' + (section.items[0].axis ? ' role="radiogroup" aria-label="' + esc(section.title || LOOK_NAMES[section.id] || DETAIL_NAMES[t.group]) + '"' : '') + '>'
+        + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + esc(section.title) + '</h3>' : '')
+        + '<div class="setting-options"' + (section.items[0].axis ? ' role="radiogroup" aria-label="' + esc(section.title || tx(LOOK_NAMES[section.id] || DETAIL_NAMES[t.group])) + '"' : '') + '>'
         + section.items.map(function (item) {
           var swatch = item.axis === 'bg', body = '';
           if (swatch || item.thumbnail) body += item.value === 'light' || item.value === 'dark'
@@ -1412,29 +1594,32 @@
         }).join('') + '</div>'
         + (section.reason ? '<p class="setting-reason">' + esc(section.reason) + '</p>' : '') + '</section>';
     }).join(''));
-    if (S.pending) status = '<p>Loading ' + esc(S.pending.row === 'font' ? FONTS[S.pending.target.font].name : 'your choice') + '…</p><p>Back cancels this change.</p>';
-    else if (error) {
-      status = '<p class="setting-error">' + (error.type === 'save' ? 'Couldn’t save this change.' : error.type === 'font' ? 'Couldn’t load ' + esc(FONTS[error.font].name) + '.' : 'Couldn’t load this appearance.') + ' Your current choice is kept.</p>'
-        + command({ action: 'settings.retry', label: 'Try again' }, '<span>Try again</span>', 'setting-retry');
+    if (S.pending) {
+      pending = S.pending.row === 'font' || S.pending.row === 'arfont' || S.pending.row === 'lang' ? valueLabel(S.pending.row, S.pending.target[S.pending.row]) : tx('your choice');
+      status = '<p>' + esc(tx('Loading {name}…', { name: pending })) + '</p><p>' + esc(tx('Back cancels this change.')) + '</p>';
+    } else if (error) {
+      status = '<p class="setting-error">' + esc(error.type === 'save' ? tx('Couldn’t save this change.') : error.type === 'font' ? tx('Couldn’t load {name}.', { name: fontName(error.font) }) : tx('Couldn’t load this appearance.')) + ' ' + esc(tx('Your current choice is kept.')) + '</p>'
+        + command({ action: 'settings.retry', label: tx('Try again') }, '<span>' + esc(tx('Try again')) + '</span>', 'setting-retry');
     }
     setHTML(appearanceStatus, status);
-    hint = selected.disabled ? '' : selected.action === 'settings.back' ? 'Return to ' + (t.group === 'rotation' ? 'Background' : 'Settings') : selected.action === 'settings.retry' ? 'Retry this change' : selected.axis ? 'Apply selected setting' : selected.action === 'background.wallpaper' ? 'Choose a wallpaper' : selected.action === 'background.rotation' ? 'Choose a rotation interval' : 'Open on the TV';
+    hint = selected.disabled ? '' : selected.action === 'settings.back' ? tx('Return to {name}', { name: tx(parentGroup(t)) }) : selected.action === 'settings.retry' ? tx('Retry this change') : selected.axis ? tx('Apply selected setting')
+      : tx({ 'background.wallpaper': 'Choose a wallpaper', 'background.rotation': 'Choose a rotation interval', 'widgets.city': 'Choose a city', 'widgets.news': 'Choose a news source' }[selected.action] || 'Open on the TV');
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
   function renderWallpaper(t) {
     V.wallpaper.norm(t);
     appearanceEl.className = 'appearance detail-wallpaper';
-    appearanceTitle.textContent = 'Wallpaper';
+    appearanceTitle.textContent = tx('Wallpaper');
     appearanceRows.className = 'appearance-rows wallpaper-picker';
-    setHTML(appearanceBack, '<button type="button" tabindex="-1" class="setting-choice setting-back' + (t.f.zone === 'back' ? ' is-focus' : '') + '" data-z="wall-back" data-action="wallpaper.back">' + icon('left') + '<span>Background</span></button>');
-    setHTML(appearanceRows, '<div class="wallpaper-edge wallpaper-before" aria-hidden="true">' + icon('up') + '</div><div class="wallpaper-list" role="radiogroup" aria-label="Wallpaper"><div class="wallpaper-rows"></div></div><div class="wallpaper-edge wallpaper-after" aria-hidden="true">' + icon('down') + '</div>');
+    setHTML(appearanceBack, '<button type="button" tabindex="-1" class="setting-choice setting-back' + (t.f.zone === 'back' ? ' is-focus' : '') + '" data-z="wall-back" data-action="wallpaper.back">' + icon('left') + '<span>' + esc(tx('Background')) + '</span></button>');
+    setHTML(appearanceRows, '<div class="wallpaper-edge wallpaper-before" aria-hidden="true">' + icon('up') + '</div><div class="wallpaper-list" role="radiogroup" aria-label="' + esc(tx('Wallpaper')) + '"><div class="wallpaper-rows"></div></div><div class="wallpaper-edge wallpaper-after" aria-hidden="true">' + icon('down') + '</div>');
     var rows = appearanceRows.querySelector('.wallpaper-rows'), shown = wall(S.wallShown) || wall(S.c.wall), candidate = WALLS[t.i], status, note, hint;
     keyed(rows, WALLS.map(function (w) { return { key: w.id, wall: w }; }), function (row, item, i) {
       var visible = i >= t.top && i < t.top + WALL_VISIBLE, w = item.wall, image;
-      setContent(row, w.id + '|' + visible, function () { return '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(w.name) + '</span></span><span class="setting-tick" aria-hidden="true"></span>'; });
+      setContent(row, w.id + '|' + visible, function () { return '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(wallName(w)) + '</span></span><span class="setting-tick" aria-hidden="true"></span>'; });
       row.className = 'setting-choice wallpaper-choice' + (t.f.zone === 'photo' && t.i === i ? ' is-focus' : '') + (w.id === S.c.wall ? ' is-applied' : '');
       row.style.transform = 'translate3d(0,' + (i * WALL_ROW) + 'px,0)'; row.style.visibility = visible ? 'visible' : 'hidden';
-      row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', w.name);
+      row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', wallName(w));
       row.setAttribute('aria-checked', String(w.id === S.c.wall)); row.setAttribute('aria-posinset', String(i + 1)); row.setAttribute('aria-setsize', String(WALLS.length));
       row.setAttribute('aria-busy', String(t.previewDue === w.id || S.wallPending === w.id));
       attrs(row, 'wall-choice', i, 'wallpaper.choose.' + w.id);
@@ -1449,14 +1634,14 @@
     rows.style.transform = 'translate3d(0,' + (-t.top * WALL_ROW) + 'px,0)';
     appearanceRows.querySelector('.wallpaper-before').className = 'wallpaper-edge wallpaper-before' + (t.top > 0 ? ' is-on' : '');
     appearanceRows.querySelector('.wallpaper-after').className = 'wallpaper-edge wallpaper-after' + (t.top + WALL_VISIBLE < WALLS.length ? ' is-on' : '');
-    note = t.previewDue ? 'Preparing ' + candidate.name + '…' : S.wallPending ? (t.applyPending ? 'Applying ' : 'Loading ') + candidate.name + '…' : shown.id === S.c.wall ? 'Applied' : 'Preview';
-    if (t.failedId) note = S.err ? 'Couldn’t save ' + wall(t.failedId).name + '.' : 'Couldn’t load ' + wall(t.failedId).name + '.';
-    status = '<p class="wallpaper-preview-name"><span>' + esc(shown.name) + '</span><span class="wallpaper-count">' + (wallIndex(shown.id) + 1) + ' of ' + WALLS.length + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
-    if (t.failedId) status += '<button type="button" tabindex="-1" class="setting-choice setting-retry' + (t.f.zone === 'retry' ? ' is-focus' : '') + '" data-z="wall-retry" data-action="wallpaper.retry">Try again</button>';
+    note = t.previewDue ? tx('Preparing {name}…', { name: wallName(candidate) }) : S.wallPending ? tx(t.applyPending ? 'Applying {name}…' : 'Loading {name}…', { name: wallName(candidate) }) : tx(shown.id === S.c.wall ? 'Applied' : 'Preview');
+    if (t.failedId) note = tx(S.err ? 'Couldn’t save {name}.' : 'Couldn’t load {name}.', { name: wallName(wall(t.failedId)) });
+    status = '<p class="wallpaper-preview-name"><span>' + esc(wallName(shown)) + '</span><span class="wallpaper-count">' + esc(tx('{n} of {total}', { n: wallIndex(shown.id) + 1, total: WALLS.length })) + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
+    if (t.failedId) status += '<button type="button" tabindex="-1" class="setting-choice setting-retry' + (t.f.zone === 'retry' ? ' is-focus' : '') + '" data-z="wall-retry" data-action="wallpaper.retry">' + esc(tx('Try again')) + '</button>';
     setHTML(appearanceStatus, status);
-    hint = t.f.zone === 'back' ? 'Return to Background' : t.f.zone === 'retry' ? 'Retry this photo' : 'Apply selected photo';
+    hint = tx(t.f.zone === 'back' ? 'Return to Background' : t.f.zone === 'retry' ? 'Retry this photo' : 'Apply selected photo');
     if (t.f.zone === 'photo' && candidate.id === S.c.wall && !S.pending && !t.failedId) hint = '';
-    setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + hint + '</span>' : '');
+    setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
   /* Keep the retry or membership state on the focused control. The stage-level line
      shares its position without changing the control's identity or key behaviour. */
@@ -1481,7 +1666,10 @@
     action = target.getAttribute('data-action');
     r = target.getBoundingClientRect(); sr = stage.getBoundingClientRect(); scale = sr.width / 1920 || 1;
     x = (r.left - sr.left) / scale; y = (r.top - sr.top) / scale; w = r.width / scale;
-    if (photoFree) { x = 112 + parseFloat(phPlates[photoPlateIndex].style.width) + 24; y += (r.height / scale - 28) / 2; w = 400; }
+    if (photoFree) {
+      x = 112 + parseFloat(phPlates[photoPlateIndex].style.width) + 24; y += (r.height / scale - 28) / 2; w = 400;
+      if (isAr()) x = 1920 - x - w; // The plate width is in Home's mirrored coordinates; the status line is not.
+    }
     else if (action.indexOf('home.app.') === 0 || action.indexOf('arrange.tile.') === 0 || action.indexOf('arrange.placeholder.') === 0) y += 171;
     else if (action.indexOf('apps.order.') === 0) y += 86;
     else if (action.indexOf('apps.toggle.') === 0 || action.indexOf('apps.add.') === 0) y += 164;
@@ -1490,14 +1678,14 @@
     solid = /(?:^|\s)(?:u|btn|er-rm|dock-action|set-row|ph-action)(?:\s|$)/.test(target.className) && target.parentNode !== utilsEl && target.parentNode.className.indexOf('s-head') < 0;
     if (target === phAction && target.className.indexOf('is-focus') < 0) solid = false;
     focusStatus.className = 'focus-status is-on' + (solid ? ' dark-ink' : '') + (photoFree ? ' photo-status' : '');
-    focusStatus.textContent = text;
+    focusStatus.textContent = tx(text);
     focusStatus.style.left = clamp(x + 8, 112, 1808 - Math.min(w - 16, 800)) + 'px';
     focusStatus.style.top = clamp(y, 72, 988) + 'px';
     focusStatus.style.width = Math.min(w - 16, 800) + 'px';
   }
   function headButtons(list, fi, prefix) {
     return list.map(function (b, i) {
-      return '<button type="button" tabindex="-1" class="btn' + (i === fi ? ' is-focus' : '') + (b[2] ? ' ' + b[2] : '') + '" data-z="head" data-i="' + i + '" data-action="' + prefix + '.' + b[0] + '" aria-label="' + esc(b[0] === 'undo' ? undoCaption() : b[1]) + '">' + (b[3] ? icon(b[3]) : '') + '<span>' + b[1] + '</span></button>';
+      return '<button type="button" tabindex="-1" class="btn' + (i === fi ? ' is-focus' : '') + (b[2] ? ' ' + b[2] : '') + '" data-z="head" data-i="' + i + '" data-action="' + prefix + '.' + b[0] + '" aria-label="' + esc(b[0] === 'undo' ? undoCaption() : tx(b[1])) + '">' + (b[3] ? icon(b[3]) : '') + '<span>' + esc(tx(b[1])) + '</span></button>';
     }).join('');
   }
   var FRAMES = {
@@ -1507,26 +1695,30 @@
         + '<div class="row-cue grid-before" data-slot="before" aria-hidden="true">' + icon('up') + '</div><div class="row-cue grid-after" data-slot="after" aria-hidden="true">' + icon('down') + '</div>';
     },
     editor: function () {
-      return '<h2 class="s-title">Apps on Home</h2><p class="s-sub" data-slot="sub"></p><div class="s-head" data-slot="head"></div>'
-        + '<p class="s-label z-home" data-slot="lh"></p><p class="s-label z-other">Not on Home</p>'
-        + '<div class="ed-home" data-slot="home"></div><div class="ed-order-break" data-slot="break">Then scroll</div><div class="ed-other-view" data-slot="ov"><div class="ed-other" data-slot="other"></div></div><div class="ed-origin" data-slot="origin"></div>'
+      return '<h2 class="s-title">' + esc(tx('Apps on Home')) + '</h2><p class="s-sub" data-slot="sub"></p><div class="s-head" data-slot="head"></div>'
+        + '<p class="s-label z-home" data-slot="lh"></p><p class="s-label z-other">' + esc(tx('Not on Home')) + '</p>'
+        + '<div class="ed-home" data-slot="home"></div><div class="ed-order-break" data-slot="break">' + esc(tx('Then scroll')) + '</div><div class="ed-other-view" data-slot="ov"><div class="ed-other" data-slot="other"></div></div><div class="ed-origin" data-slot="origin"></div>'
         + '<div class="row-cue editor-before" data-slot="otherBefore" aria-hidden="true">' + icon('up') + '</div><div class="row-cue editor-after" data-slot="otherAfter" aria-hidden="true">' + icon('down') + '</div>';
     },
-    settings: function () { return '<h2 class="s-title">Settings</h2><div class="settings-overview" data-slot="list"></div><p class="settings-overview-hint"><span class="remote-key">OK</span><span>Open selected group</span></p>'; },
+    settings: function () {
+      return '<h2 class="s-title">' + esc(tx('Settings')) + '</h2><div class="settings-overview" data-slot="view"><div class="settings-overview-in" data-slot="list"></div></div>'
+        + '<div class="row-cue settings-before" data-slot="before" aria-hidden="true">' + icon('up') + '</div><div class="row-cue settings-after" data-slot="after" aria-hidden="true">' + icon('down') + '</div>'
+        + '<p class="settings-overview-hint"><span class="remote-key">OK</span><span>' + esc(tx('Open selected group')) + '</span></p>';
+    },
     message: function (t) {
       var m = messageContent(t);
-      return '<h2 class="msg-title">' + esc(m.title) + '</h2><p class="msg-line">' + esc(m.line) + '</p><p class="msg-note">' + esc(m.note) + '</p><div class="msg-acts" data-slot="acts"></div>';
+      return '<h2 class="msg-title">' + esc(tx(m.title)) + '</h2><p class="msg-line">' + esc(tx(m.line)) + '</p><p class="msg-note">' + esc(tx(m.note)) + '</p><div class="msg-acts" data-slot="acts"></div>';
     }
   };
   function gridTileHtml(id) {
-    var a = app(id), state = onHome(id) ? badge(true) + '<span>On Home</span>' : '';
+    var a = app(id), state = onHome(id) ? badge(true) + '<span>' + esc(tx('On Home')) + '</span>' : '';
     return '<span class="panel-content">' + appMark(a, 120, 72, 58) + '<span class="label">' + esc(a.name) + '</span></span><span class="state">' + state + '</span>';
   }
   var FILLS = {
     apps: function (t, el) {
       var f = t.f, items = appsItems(), n = items.length, rows = Math.ceil(n / COLS), vis = 3, row = Math.floor(f.i / COLS);
-      setHTML(el.title, 'All apps');
-      setHTML(el.sub, esc(catalog.loading ? 'Loading installed apps…' : catalog.error || (!n ? 'No installed apps found.' : '')));
+      setHTML(el.title, esc(tx('All apps')));
+      setHTML(el.sub, esc(tx(catalog.loading ? 'Loading installed apps…' : catalog.error || (!n ? 'No installed apps found.' : ''))));
       setHTML(el.head, headButtons(appsHead(), f.zone === 'head' ? 0 : -1, 'apps'));
       el.head.className = 's-head' + (f.zone === 'head' ? ' is-awake' : '');
       if (f.zone === 'grid') { if (row < t.top) t.top = row; if (row > t.top + vis - 1) t.top = row - vis + 1; }
@@ -1535,7 +1727,7 @@
         var focus = f.zone === 'grid' && i === f.i;
         setContent(tile, [it.id, app(it.id).name, onHome(it.id)].join('|'), function () { return gridTileHtml(it.id); });
         tile.className = 'gt' + (focus ? ' is-focus' : '');
-        tile.style.transform = 'translate3d(' + ((i % COLS) * GRID_COL) + 'px,' + (Math.floor(i / COLS) * GRID_ROW) + 'px,0)';
+        tile.style.transform = 'translate3d(' + ((isAr() ? COLS - 1 - i % COLS : i % COLS) * GRID_COL) + 'px,' + (Math.floor(i / COLS) * GRID_ROW) + 'px,0)';
         tile.setAttribute('role', 'button'); tile.setAttribute('aria-label', app(it.id).name);
         attrs(tile, 'grid', i, 'apps.open.' + it.id);
       });
@@ -1547,11 +1739,11 @@
     editor: function (t, el) {
       var f = t.f, H = t.lifted ? t.lifted.order : S.c.home, O = otherGroups(), list = O.recent.concat(O.rest), full = S.c.home.length >= CAP;
       var entries = [], ys = [], y = 0, yf, minTop, maxTop = 0, rowEnd, before = false, afterRows = false;
-      var hint = catalog.error ? catalog.error : catalog.loading ? 'Loading installed apps…' : f.zone === 'head' && f.h === 0 ? undoCaption() : f.zone === 'home' && f.part === 'remove' ? (H.length <= 1 ? LAST : app(H[f.i]).name + ' stays installed.') : '';
-      setHTML(el.sub, editStatus(hint, t.lifted ? 'Moving ' + app(t.lifted.id).name + '. OK places it, Back puts it back.' : ''));
+      var hint = catalog.error ? catalog.error : catalog.loading ? 'Loading installed apps…' : f.zone === 'head' && f.h === 0 ? undoCaption() : f.zone === 'home' && f.part === 'remove' ? (H.length <= 1 ? LAST : tx('{name} stays installed.', { name: app(H[f.i]).name })) : '';
+      setHTML(el.sub, editStatus(hint, t.lifted ? tx('Moving {name}. OK places it, Back puts it back.', { name: app(t.lifted.id).name }) : ''));
       setHTML(el.head, headButtons([['undo', 'Undo', S.undo.length ? '' : 'is-idle', 'undo'], ['done', 'Done', '', 'check']], f.zone === 'head' ? f.h : -1, 'editor'));
       el.head.className = 's-head' + (f.zone === 'head' ? ' is-awake' : '');
-      setHTML(el.lh, 'On Home <span class="s-count">' + S.c.home.length + ' of ' + CAP + '</span>');
+      setHTML(el.lh, esc(tx('On Home')) + ' <span class="s-count">' + esc(tx('{n} of {total}', { n: S.c.home.length, total: CAP })) + '</span>');
       el['break'].className = 'ed-order-break' + (H.length > editorCut() ? ' is-on' : '');
       el['break'].style.top = (264 + editorCut() * ED_ROW) + 'px';
 
@@ -1559,20 +1751,20 @@
         var a = app(it.id), here = f.zone === 'home' && i === f.i, lifted = !!t.lifted && i === f.i;
         setContent(row, it.id, function () { return '<div class="er-name" role="button"><span class="panel-content"><span class="er-num"></span>' + smallMark(a) + '<span class="er-text">' + esc(a.name) + '</span><span class="er-move">' + icon('updown') + '</span></span></div><div class="er-rm" role="button"><span></span></div>'; });
         row.className = 'er' + (here ? ' is-active' : '') + (lifted ? ' is-lifted' : '');
-        row.style.transform = 'translate3d(' + (lifted ? 16 : 0) + 'px,' + editorHomeY(i) + 'px,0)';
+        row.style.transform = 'translate3d(' + (lifted ? isAr() ? -16 : 16 : 0) + 'px,' + editorHomeY(i) + 'px,0)';
         row.querySelector('.er-num').textContent = String(i + 1);
         row.firstChild.className = 'er-name' + (here && (f.part === 'name' || lifted) ? ' is-focus' : '');
         row.lastChild.className = 'er-rm' + (here && f.part === 'remove' && !lifted ? ' is-focus' : '') + (H.length <= 1 ? ' is-limit' : '');
-        row.lastChild.firstChild.textContent = H.length <= 1 ? LAST : 'Remove from Home';
+        row.lastChild.firstChild.textContent = tx(H.length <= 1 ? LAST : 'Remove from Home');
         attrs(row.firstChild, 'name', i, 'editor.move.' + it.id);
         attrs(row.lastChild, 'remove', i, 'editor.remove.' + it.id);
       });
       el.origin.className = 'ed-origin' + (t.lifted && t.lifted.from !== f.i ? ' is-on' : '');
       if (t.lifted) el.origin.style.transform = 'translate3d(0,' + (264 + editorHomeY(t.lifted.from) + 16) + 'px,0)';
 
-      if (O.recent.length) { entries.push({ key: 'sep-recent', sep: 'Recently removed', y: y }); y += ED_SEP; }
+      if (O.recent.length) { entries.push({ key: 'sep-recent', sep: tx('Recently removed'), y: y }); y += ED_SEP; }
       O.recent.forEach(function (id) { entries.push({ key: id, id: id, y: y }); ys.push(y); y += ED_ROW; });
-      if (O.recent.length && O.rest.length) { entries.push({ key: 'sep-rest', sep: 'Other installed apps', y: y }); y += ED_SEP; }
+      if (O.recent.length && O.rest.length) { entries.push({ key: 'sep-rest', sep: tx('Other installed apps'), y: y }); y += ED_SEP; }
       O.rest.forEach(function (id) { entries.push({ key: id, id: id, y: y }); ys.push(y); y += ED_ROW; });
       if (f.zone === 'other' && ys.length) {
         yf = ys[f.j] - (O.recent.length && (f.j === 0 || f.j === O.recent.length) ? ED_SEP : 0);
@@ -1593,7 +1785,7 @@
         if (it.sep) { setContent(row, 'sep|' + it.sep, function () { return esc(it.sep); }); row.className = 'eo-sep'; return; }
         j = list.indexOf(it.id); focus = f.zone === 'other' && j === f.j; a = app(it.id);
         setContent(row, it.id, function () { return '<span class="panel-content">' + smallMark(a) + '<span class="eo-text">' + esc(a.name) + '</span><span class="eo-verb"></span></span>'; });
-        setHTML(row.querySelector('.eo-verb'), focus ? '<span class="verb' + (full ? ' is-off' : '') + '">' + (full ? 'Home is full' : 'Add to Home') + '</span>' : '');
+        setHTML(row.querySelector('.eo-verb'), focus ? '<span class="verb' + (full ? ' is-off' : '') + '">' + esc(tx(full ? 'Home is full' : 'Add to Home')) + '</span>' : '');
         row.className = 'eo' + (focus ? ' is-focus' : '');
         row.setAttribute('role', 'button');
         attrs(row, 'other', j, 'editor.add.' + it.id);
@@ -1604,15 +1796,20 @@
       el.otherAfter.className = 'row-cue editor-after' + (afterRows ? ' is-on' : '');
     },
     settings: function (t, el) {
-      var html = '';
-      settingsRows().forEach(function (r) {
-        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '" data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(r.label) + '</span><span class="settings-group-value">' + esc(r.value) + '</span></span>' + icon('right') + '</button>';
+      // Six groups fit the screen; the window follows focus, so the later groups scroll into view.
+      var html = '', rows = settingsRows(), n = rows.length, i = Math.max(0, settingsIds().indexOf(t.f.id));
+      t.top = clamp(clamp(t.top || 0, i - SET_VISIBLE + 1, i), 0, Math.max(0, n - SET_VISIBLE));
+      rows.forEach(function (r, k) {
+        html += '<button type="button" tabindex="-1" class="settings-group' + (r.id === t.f.id ? ' is-focus' : '') + '"' + (k < t.top || k >= t.top + SET_VISIBLE ? ' style="visibility:hidden"' : '') + ' data-z="row" data-i="0" data-id="' + r.id + '" data-action="settings.' + (r.id === 'editor' ? 'editor' : 'group.' + r.id) + '"><span class="settings-group-copy"><span class="settings-group-name">' + esc(r.label) + '</span><span class="settings-group-value">' + esc(r.value) + '</span></span>' + icon('right') + '</button>';
       });
       setHTML(el.list, html);
+      el.list.style.transform = 'translate3d(0,' + (-t.top * SET_ROW) + 'px,0)';
+      el.before.className = 'row-cue settings-before' + (t.top > 0 ? ' is-on' : '');
+      el.after.className = 'row-cue settings-after' + (t.top + SET_VISIBLE < n ? ' is-on' : '');
     },
     message: function (t, el) {
       setHTML(el.acts, messageContent(t).actions.map(function (a, i) {
-        return '<button type="button" tabindex="-1" class="btn' + (i === t.f.b ? ' is-focus' : '') + '" data-z="act" data-i="' + i + '" data-action="message.' + a[0] + '"><span>' + a[1] + '</span></button>';
+        return '<button type="button" tabindex="-1" class="btn' + (i === t.f.b ? ' is-focus' : '') + '" data-z="act" data-i="' + i + '" data-action="message.' + a[0] + '"><span>' + esc(tx(a[1])) + '</span></button>';
       }).join(''));
     }
   };
@@ -1643,6 +1840,7 @@
     imgs.fieldAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
     imgs.utility = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
     imgs.utilityAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+    imgs.news = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
     keys = Object.keys(imgs); left = keys.length;
     keys.forEach(function (k) { whenReady(imgs[k], function (ok) {
       allOk = allOk && ok;
@@ -1655,8 +1853,8 @@
       Object.keys(bundle.imgs).forEach(function (k) { if (!previewOnly || k !== 'bg') swapImg(k, bundle.imgs[k]); });
       S.bundleKey = bundle.key;
     }
-    S.shown = { bg: look.bg, wall: look.wall, material: look.material, font: look.font };
-    phFields.concat(utFields).forEach(function (el) { var p = el._placement; if (p) fieldTransform(el, p.x, p.y, p.width, p.height); });
+    S.shown = { bg: look.bg, wall: look.wall, material: look.material, font: look.font, lang: look.lang, arfont: look.arfont };
+    phFields.concat(utFields, newsField).forEach(function (el) { var p = el._placement; if (p) fieldTransform(el, p.x, p.y, p.width, p.height); });
     S.wallShown = look.wall; S.wallPending = null; S.wallError = null;
   }
   function cleanPatch(patch) {
@@ -1664,7 +1862,7 @@
     if (!patch || typeof patch !== 'object') throw new Error('look needs an appearance patch');
     for (k in patch) if (patch.hasOwnProperty(k)) {
       if (k === 'wall') { if (!wall(patch[k])) throw new Error('Unknown wallpaper: ' + patch[k]); }
-      else if (k === 'font') { if (!FONTS[patch[k]] || patch[k] !== 'manrope' && PRIVATE_FONTS.indexOf(patch[k]) < 0) throw new Error('Unavailable font: ' + patch[k]); }
+      else if (k === 'font' || k === 'arfont') { if (!FONTS[patch[k]] || (FONTS[patch[k]].script === 'arabic') !== (k === 'arfont') || ['manrope', 'plexar'].indexOf(patch[k]) < 0 && PRIVATE_FONTS.indexOf(patch[k]) < 0) throw new Error('Unavailable font: ' + patch[k]); }
       else if (!LOOK_VALUES[k] || LOOK_VALUES[k].indexOf(patch[k]) < 0) throw new Error('Invalid appearance value: ' + k);
       out[k] = patch[k];
     }
@@ -1677,7 +1875,7 @@
     changed = Object.keys(target).some(function (key) { return target[key] !== S.c[key]; });
     cancelLook(); S.err = null; token = wallToken;
     function finish(bundle) {
-      var c = next(S.c.home.slice(), S.c.recent.slice()), fontChanged = target.font !== S.c.font, reflow = target.apps !== S.c.apps || target.controls !== S.c.controls || fontChanged, frame, fontFrame;
+      var c = next(S.c.home.slice(), S.c.recent.slice()), fontChanged = effFont(target) !== effFont(S.c), reflow = target.apps !== S.c.apps || target.controls !== S.c.controls || fontChanged || target.lang !== S.c.lang, frame, fontFrame;
       Object.keys(target).forEach(function (key) { c[key] = target[key]; });
       S.pending = null; S.wallPending = null;
       if (!opts.transient && changed && !write(c, 'Appearance')) { S.lookError = { type: 'save', patch: changes, row: opts.row || S.appearanceFocus, transient: false }; render(); syncRotation(); return; }
@@ -1687,7 +1885,7 @@
       installBundle(bundle, target);
       if (bundle) committedBundle = bundle;
       S.lookError = null; S.previewBundle = null;
-      render(); syncRotation();
+      render(); syncRotation(); syncNews();
       if (reflow) window.requestAnimationFrame(function () { window.requestAnimationFrame(function () {
         if (frame !== reflowToken) return;
         S.reflow = false; stage.className = stage.className.replace(/\s+is-reflow/g, '');
@@ -1701,9 +1899,11 @@
       if (token !== wallToken || failed) return;
       failed = true; S.pending = null; S.wallPending = null;
       if (type === 'load') S.wallError = target.wall;
-      S.lookError = { type: type, reason: reason || null, patch: changes, row: opts.row || (type === 'font' ? 'font' : S.appearanceFocus), transient: !!opts.transient, wall: target.wall, font: target.font };
-      if (type === 'font') log((opts.startup ? 'font fallback: ' : 'Font kept: ') + (opts.startup ? target.font : FONTS[S.c.font].name) + (opts.startup ? '' : ' (' + reason + ')'));
-      if (type === 'font' && opts.startup && target.font !== 'manrope') { setLook({ font: 'manrope' }, { transient: true }); return; }
+      S.lookError = { type: type, reason: reason || null, patch: changes, row: opts.row || (type === 'font' ? fontAxis() : S.appearanceFocus), transient: !!opts.transient, wall: target.wall, font: effFont(target) };
+      if (type === 'font') log((opts.startup ? 'font fallback: ' : 'Font kept: ') + (opts.startup ? effFont(target) : FONTS[effFont(S.c)].name) + (opts.startup ? '' : ' (' + reason + ')'));
+      // A missing optional face at startup falls back to that script's bundled baseline.
+      if (type === 'font' && opts.startup && target.lang === 'ar' && target.arfont !== 'plexar') { setLook({ arfont: 'plexar' }, { transient: true }); return; }
+      if (type === 'font' && opts.startup && target.lang !== 'ar' && target.font !== 'manrope') { setLook({ font: 'manrope' }, { transient: true }); return; }
       render(); syncRotation();
     }
     function complete() {
@@ -1712,9 +1912,9 @@
       window.requestAnimationFrame(function () { if (!failed && token === wallToken) finish(loadedBundle); });
     }
     needs = target.bg === 'photo' && S.bundleKey !== bundleKey(target) && (!S.shown || S.shown.bg !== 'photo' || target.wall !== S.c.wall || materialApplies(target));
-    needsFont = !fontMetrics[target.font]; imageDone = !needs; fontDone = !needsFont;
+    needsFont = !fontMetrics[effFont(target)] || target.lang === 'ar' && !fontMetrics.plexar; imageDone = !needs; fontDone = !needsFont;
     if (!needs && !needsFont) { finish(null); return; }
-    S.pending = { patch: changes, target: target, row: opts.row || (needsFont ? 'font' : S.appearanceFocus), transient: !!opts.transient, preview: false };
+    S.pending = { patch: changes, target: target, row: opts.row || (needsFont ? (target.lang === 'ar' ? 'arfont' : 'font') : S.appearanceFocus), transient: !!opts.transient, preview: false };
     if (needs) {
       S.wallPending = target.wall;
       loadBundle(target, token, function (bundle) {
@@ -1722,7 +1922,7 @@
         loadedBundle = bundle; imageDone = true; complete();
       });
     }
-    if (needsFont) ensureFont(target.font, function (ok, reason) {
+    if (needsFont) ensureFont(effFont(target), function (ok, reason) {
       if (!ok) { fail('font', reason); return; }
       fontDone = true; complete();
     });
@@ -1773,7 +1973,7 @@
     clockTimer = setTimeout(updateClock, 60000 - (Date.now() % 60000) + 30);
   }
   function focusStage() { try { stage.focus({ preventScroll: true }); } catch (e) { stage.focus(); } }
-  function after() { norm(); render(); syncRotation(); }
+  function after() { norm(); render(); syncRotation(); syncNews(); }
   function goScene(name) {
     if (top().id === 'wallpaper') cancelWallpaperTimer(top());
     S.stack = [S.stack[0]]; S.stack[0].f.zone = 'apps'; clearSession(); restoreLook();
@@ -1839,14 +2039,14 @@
     if (!k || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     ev.preventDefault();
     if (k === 'ok' || k === 'back') { if (ev.repeat || heldKeys[code]) return; heldKeys[code] = true; }
-    press(k);
+    press(physical(k));
   });
   document.addEventListener('keyup', function (ev) { delete heldKeys[ev.keyCode]; });
   window.addEventListener('blur', function () { heldKeys = {}; });
   window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); });
   document.addEventListener('visibilitychange', function () {
     heldKeys = {};
-    if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); }
+    if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); syncNews(); }
     else {
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
@@ -1862,7 +2062,10 @@
     out.committed = S.c; out.shown = S.shown; out.pending = S.pending; out.view = t.id; out.selected = S.sel;
     out.focusAction = focusedAction(); out.writes = S.writes; out.failedWrites = S.failed; out.error = S.err;
     out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice() };
-    out.fonts = { available: LOOK_VALUES.font.slice(), loaded: Object.keys(fontMetrics).filter(function (id) { return !fontMetrics[id].fallback; }), baselineFallback: !!(fontMetrics.manrope && fontMetrics.manrope.fallback), error: S.lookError && S.lookError.type === 'font' ? S.lookError : null };
+    out.fonts = { available: LOOK_VALUES.font.slice(), arabic: LOOK_VALUES.arfont.slice(), loaded: Object.keys(fontMetrics).filter(function (id) { return !fontMetrics[id].fallback; }), baselineFallback: !!(fontMetrics.manrope && fontMetrics.manrope.fallback), error: S.lookError && S.lookError.type === 'font' ? S.lookError : null };
+    out.display = { lang: lang(), dir: stage.getAttribute('dir') };
+    out.prayers = ALMANAC ? ALMANAC.prayers(Date.now(), S.c.city) : null;
+    out.headlines = { active: newsActive(), source: news.source, loading: news.loading, error: news.error, titles: news.items.map(function (item) { return item.title; }) };
     out.rotation = { activeMs: activeMs + (activeSince ? Date.now() - activeSince : 0), active: !!activeSince };
     out.draft = t.lifted ? { id: t.lifted.id, order: t.lifted.order.slice() } : null;
     out.settingsGroup = t.id === 'wallpaper' ? 'wallpaper' : t.id === 'appearance' ? t.group : null;
@@ -1878,8 +2081,9 @@
     Array.prototype.forEach.call(active, function (el) { if (renderedAction(el)) { count++; if (el.getAttribute('data-action') === action) name = el.getAttribute('aria-label') || el.textContent.replace(/\s+/g, ' ').trim(); } });
     return { view: top().id, settingsGroup: top().id === 'wallpaper' ? 'wallpaper' : top().id === 'appearance' ? top().group : null, focus: name, focusAction: action, focusCount: count, wallpaper: S.wallShown, zone: top().f.zone || null };
   };
-  QA.ready = function () { return fontsReady && !S.pending && !!S.shown && S.shown.bg === S.c.bg && S.shown.wall === S.c.wall && S.shown.font === S.c.font; };
-  QA.nav = function () { var keys = arguments.length === 1 && Array.isArray(arguments[0]) ? arguments[0] : Array.prototype.slice.call(arguments); keys.forEach(function (key) { if (!NAV[key]) throw new Error('Unknown key'); press(NAV[key]); }); return QA.state(); };
+  QA.ready = function () { return fontsReady && !S.pending && !!S.shown && S.shown.bg === S.c.bg && S.shown.wall === S.c.wall && S.shown.font === S.c.font && S.shown.lang === S.c.lang && S.shown.arfont === S.c.arfont; };
+  /* Keys are the remote's physical keys, so Left and Right follow the mirrored Arabic screen. */
+  QA.nav = function () { var keys = arguments.length === 1 && Array.isArray(arguments[0]) ? arguments[0] : Array.prototype.slice.call(arguments); keys.forEach(function (key) { if (!NAV[key]) throw new Error('Unknown key'); press(physical(NAV[key])); }); return QA.state(); };
   QA.look = function (patch) { setLook(patch, {}); return QA.state(); };
   QA.scene = function (name) { if (['home', 'apps', 'settings', 'appearance', 'editor'].indexOf(name) < 0) throw new Error('Unknown view'); goScene(name); return QA.state(); };
   QA.activate = function (action) { return activate(action) ? QA.state() : null; };
@@ -1889,5 +2093,5 @@
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
   initialise();
   setLook({}, { transient: true, startup: true });
-  norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews();
 })();

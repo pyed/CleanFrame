@@ -7,10 +7,15 @@ The root MIT licence covers CleanFrame's original code and documentation. Third-
 | Material | Terms and source record |
 | --- | --- |
 | Manrope | SIL Open Font License 1.1; `app/assets/manrope-OFL.txt` |
-| Geist and Newsreader | SIL Open Font License 1.1; licences beside the files in `app/assets/fonts/`, with exact sources and hashes in `app/assets/fonts/SOURCES.json` |
+| Geist, Newsreader and IBM Plex Sans Arabic | SIL Open Font License 1.1; licences beside the files in `app/assets/fonts/`, with exact sources and hashes in `app/assets/fonts/SOURCES.json`. "Plex" is a Reserved Font Name of IBM Corp. |
 | Optional PP Neue Montreal, PP Mori and PP Pangram Sans | Proprietary. Binaries stay in ignored `.local/` storage and are excluded from Git and public exports. The optional local overlay requires the user's own permission to use and embed those files. |
+| Optional Thmanyah Sans and Thmanyah Serif Display | Thmanyah Publishing and Distribution's [font licence](https://font.thmanyah.com/licenses): free personal and commercial use, including inside a packaged app, but no redistribution, hosting, modification or extraction by others. Each owner downloads the files from font.thmanyah.com into ignored `.local/`; they are excluded from Git and public exports. |
 
-The public app uses Manrope, Geist and Newsreader. A personal widget containing proprietary fonts must stay private. See [Pangram's licensing information](https://pangrampangram.com/pages/eula).
+The public app uses Manrope, Geist, Newsreader and IBM Plex Sans Arabic. A personal widget containing proprietary fonts must stay private. See [Pangram's licensing information](https://pangrampangram.com/pages/eula).
+
+## News headlines
+
+In Arabic, Home can show headline text from the public RSS feed of CNN Arabic, Sky News Arabia, Asharq Al-Awsat or DW Arabic. The feeds are read on the viewer's TV for personal display; no headline is bundled, stored or redistributed by this project. Each publisher retains its rights in its headlines and names.
 
 ## Icons and trademarks
 

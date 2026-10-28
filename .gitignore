@@ -36,6 +36,11 @@ PP*.ttf
 PP*.otf
 PP*.woff
 PP*.woff2
+# Thmanyah fonts may not be redistributed; download them into .local/ yourself.
+thmanyah*.otf
+thmanyah*.ttf
+thmanyah*.woff
+thmanyah*.woff2
 *.wgt
 
 # Personal studies, research and draft writing stay local.

@@ -34,5 +34,41 @@
     "bytes": 4394,
     "sha256": "fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8",
     "unchanged_upstream_bytes": true
+  },
+  {
+    "family": "ibm-plex-sans-arabic",
+    "file": "ibm-plex-sans-arabic/IBMPlexSansArabic-Regular.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Regular.ttf",
+    "accessed": "2026-10-28",
+    "bytes": 235924,
+    "sha256": "6f611412270a132bbac838da9259d4c68569b4175f3b3b8fa3fa36a30b56dab9",
+    "unchanged_upstream_bytes": true
+  },
+  {
+    "family": "ibm-plex-sans-arabic",
+    "file": "ibm-plex-sans-arabic/IBMPlexSansArabic-Medium.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Medium.ttf",
+    "accessed": "2026-10-28",
+    "bytes": 242100,
+    "sha256": "b8363ab9f733dfa4f8e96b8b2102c24b5cf4110fb96d1d3d9a9412f6fb49cf74",
+    "unchanged_upstream_bytes": true
+  },
+  {
+    "family": "ibm-plex-sans-arabic",
+    "file": "ibm-plex-sans-arabic/IBMPlexSansArabic-SemiBold.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-SemiBold.ttf",
+    "accessed": "2026-10-28",
+    "bytes": 244616,
+    "sha256": "597bd5502e5997be4414e4c9c88834b30ff3784250c84f20bce2b20e53ebd467",
+    "unchanged_upstream_bytes": true
+  },
+  {
+    "family": "ibm-plex-sans-arabic",
+    "file": "ibm-plex-sans-arabic/OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/OFL.txt",
+    "accessed": "2026-10-28",
+    "bytes": 4456,
+    "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+    "unchanged_upstream_bytes": true
   }
 ]

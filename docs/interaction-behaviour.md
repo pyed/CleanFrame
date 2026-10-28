@@ -12,16 +12,18 @@
 
 ## Settings and appearance
 
-Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps on Home and Samsung. OK opens a group. Appearance groups use a two-pane screen with visible choices on the left and the committed Home preview on the right.
+Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps on Home, Samsung, Widgets and Language. Six groups are visible; Up/Down scrolls the overview to the last two, with cues above and below. OK opens a group. Appearance groups use a two-pane screen with visible choices on the left and the committed Home preview on the right.
 
 | Group | Choices |
 | --- | --- |
 | Background | Photo, Light, Dark; Wallpaper and Rotation when Photo is active |
 | Layout | List or Dock; independent Text, Icons or Both choices for apps and Home controls |
-| Typography | Manrope, Neue Montreal, Mori, Pangram Sans, Geist and Newsreader, when available |
+| Typography | Manrope, Neue Montreal, Mori, Pangram Sans, Geist and Newsreader, when available; in Arabic, IBM Plex Sans Arabic, Thmanyah Sans and Thmanyah Serif Display, when available |
 | Focus | Type or Glass; Soft, Frost or Clear tint material |
 | Apps on Home | Membership and arrangement editor |
 | Samsung | Samsung Home and TV settings |
+| Widgets | Date and prayer times, each Show or Hide; prayer city; headline source (Arabic only) |
+| Language | English or العربية |
 
 Up/Down moves between rows. Left/Right moves between choices in a horizontal row. Focus alone changes neither the preview nor saved preferences in these appearance groups. Wallpaper has its own temporary photo preview, described below. OK applies the focused value. A checkmark identifies the applied value; the filled plate identifies remote focus. Applying the current value does not write again.
 
@@ -29,7 +31,23 @@ Material applies to a photographic Dock, or Glass focus on a photographic List. 
 
 A font or photo change applies only after its resources are ready and storage succeeds. A load or storage failure keeps the previous appearance and checkmark, with a Try again action. Back cancels a pending change, leaves the group and keeps completed changes. Late load callbacks cannot apply a cancelled choice. There is no Save button. Returning to a group restores its last choice focus; returning to Settings restores its category focus. Rotation is nested within Background, and Back returns to its Rotation row.
 
-The selected font applies to Home app names, the clock and Home controls, including Newsreader. Settings, All apps, the Home editor and status text retain Manrope. The preview shows the committed Home appearance and its clock continues to update. Pangram faces are available in Nathan's private build when the local files are present; their binaries are not included in the public source. An unavailable optional face is omitted. If the baseline font is slow or missing, Home remains usable with a local fallback and can recover when the font loads.
+The selected font applies to Home app names, the clock and Home controls, including Newsreader. Settings, All apps, the Home editor and status text retain Manrope, or IBM Plex Sans Arabic in Arabic. The preview shows the committed Home appearance and its clock continues to update. Pangram faces are available in Nathan's private build when the local files are present; their binaries are not included in the public source. An unavailable optional face is omitted. If the baseline font is slow or missing, Home remains usable with a local fallback and can recover when the font loads.
+
+## Arabic and right to left
+
+Settings → Language applies Arabic like a font change: the interface switches only when IBM Plex Sans Arabic (and any selected local Arabic face) is ready and storage succeeds, and Back cancels a pending switch. All interface text is Arabic; app names keep their own spelling and direction. Numerals stay Western (0-9).
+
+Arabic mirrors Home together with its photograph. The clock and its widgets move to the top right, Home controls to the top left (Dock) or bottom left (List), the Dock fills from the right and List names align right. Because the photo, scrims and registered glass fields mirror with the layout, each text area keeps the photo region and offline ink chosen for it. Text, logos and icons turn back so they read normally; directional arrows point the mirrored way. Wallpapers therefore appear mirrored in Arabic.
+
+Remote Left and Right follow the screen: Left moves to whatever is shown on the left. In the Dock, Left selects the next app; in List, Left reaches the controls; Settings rows, All apps, the editor and messages behave the same way. Up, Down, OK and Back are unchanged. Settings, All apps and the editor mirror their layout, with the Home preview on the left.
+
+## Date, prayer times and headlines
+
+The clock column can show a date line and prayer times, each controlled under Settings → Widgets. The date gives the weekday, Gregorian day and month, then the Umm al-Qura Hijri date, for example `Wednesday 28 October · 17 Jumada al-Ula 1448 AH`. The Hijri date comes from a bundled Umm al-Qura table (1440-1500 AH); outside it, the arithmetic calendar may differ by a day. Religious dates announced by moon sighting can differ from Umm al-Qura.
+
+Prayer times show the next prayer with a countdown (`Asr in 2 h 38 min`) and the day's five times, the next one emphasised; on Fridays Dhuhr is labelled Jumuah. Times are calculated offline in 12-hour form for the chosen city with its official method: Umm al-Qura for the Saudi cities, and the UAE, Qatar and Kuwait methods for those cities, with the standard Asr. They use the city's fixed UTC offset, so the countdown stays correct even if the TV is set to another time zone. The lines refresh with the clock at each minute. A soft photo shade sits under them, mirrored with the photo.
+
+In Arabic, a glass card shows the three newest headlines from the selected source: CNN Arabic (default), Sky News Arabia, Asharq Al-Awsat or DW Arabic, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
 
 ## Streaming apps
 
@@ -66,7 +84,7 @@ Installed-app discovery allows up to 20 seconds for large TV catalogues; launch 
 
 ## Preferences and wallpaper
 
-The launcher stores appearance, Home order, recently removed apps, the last launched Home app, wallpaper and rotation locally. List and Dock share these preferences. The existing `cleanframe.home.v1` key is retained, with a fallback read from `cleanframe.shore.v1`. Legacy List maps to Dark + List + Type; Glass Dock and Glass Grid map to Photo + Dock + Glass. App order, wallpaper, rotation and the last Home app are preserved.
+The launcher stores appearance (including language and Arabic font), Home order, recently removed apps, the last launched Home app, wallpaper, rotation and widget choices locally. Earlier preferences gain English with the date and Riyadh prayer times shown. List and Dock share these preferences. The existing `cleanframe.home.v1` key is retained, with a fallback read from `cleanframe.shore.v1`. Legacy List maps to Dark + List + Type; Glass Dock and Glass Grid map to Photo + Dock + Glass. App order, wallpaper, rotation and the last Home app are preserved.
 
 The gallery contains 15 bundled wallpapers. Settings → Background → Wallpaper keeps the two-pane Settings frame. Up/Down browses a vertical thumbnail list without wrapping; the right-hand Home preview shows the candidate while the surrounding Settings backdrop stays on the applied photo. OK applies the focused photo and stays in Wallpaper. The tick marks the applied photo and preview status distinguishes unsaved browsing. Back restores the latest applied photo, cancels pending loading and returns to Background’s Wallpaper row. Photo and material assets change as one complete bundle; a failed load restores the applied preview and offers retry. Preview loading waits briefly for remote focus to settle. OK during loading queues application for that photo; another browse move or Back cancels it. Browsing never saves, and repeated OK on the applied photo does not write again.
 
@@ -83,7 +101,7 @@ The native Home operation and startup configuration from 19 October remain separ
 
 ## Clock and rendering
 
-Both layouts show the TV's local time in 12-hour format, without AM/PM or seconds. It updates at the minute boundary and on return to the launcher. No date or clock panel is shown.
+Both layouts show the TV's local time in 12-hour format, without AM/PM or seconds. It updates at the minute boundary and on return to the launcher. The optional date and prayer lines sit beneath it; there is no clock panel.
 
 Photographic materials and blurred panel backgrounds are generated before packaging and stay aligned with the full-screen image. Photo colour and contrast metadata are also prepared offline. Navigation does not sample image pixels, run an optics engine or apply live backdrop blur. Flat backgrounds use matching light or dark panel colours. Focus feedback uses transforms and opacity; reduced motion removes animated scaling and movement while retaining opacity feedback.
 

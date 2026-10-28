@@ -51,13 +51,18 @@ findings = []
 font_suffixes = {'.ttf', '.otf', '.woff', '.woff2', '.eot'}
 
 
+def proprietary_font(path):
+    """Pangram and Thmanyah files may be used locally but never published."""
+    return (path.name.startswith('PP') or path.name.lower().startswith('thmanyah')) and path.suffix.lower() in font_suffixes
+
+
 def forbidden(name):
     path = Path(name)
     return (name.startswith(('.local/', 'dist/', 'node_modules/', 'app/assets/private-fonts/',
                                     'explorations/', 'docs/research/', 'docs/articles/'))
             or private_path(name) or path.suffix.lower() in {'.wgt', '.dll', '.pdb', '.exe'}
             or any(part.lower() in {'bin', 'obj'} for part in path.parts)
-            or (path.name.startswith('PP') and path.suffix.lower() in font_suffixes))
+            or proprietary_font(path))
 
 
 public_fonts = {'app/assets/manrope.woff2': 'e310b55a7fd9677f5e3555e6c6c4d064fa1f1d24393f0ddbe217cea12a8c432f'}
@@ -116,12 +121,12 @@ for name, oid in history:
     if oid in unsafe_blobs:
         findings.append('Credential pattern in reachable Git history: ' + name)
 private_root = ROOT / '.local/research/font-candidates'
-private_fonts = [p for p in private_root.rglob('*') if p.is_file() and p.name.startswith('PP') and p.suffix.lower() in font_suffixes]
+private_fonts = [p for p in private_root.rglob('*') if p.is_file() and proprietary_font(p)]
 for path in private_fonts:
     if git('hash-object', str(path)).decode().strip() in object_ids:
         findings.append('Known proprietary font bytes in Git history: ' + path.name)
 
-for name in ['app/assets/fonts/geist/OFL.txt', 'app/assets/fonts/newsreader/OFL.txt', 'app/assets/manrope-OFL.txt']:
+for name in ['app/assets/fonts/geist/OFL.txt', 'app/assets/fonts/newsreader/OFL.txt', 'app/assets/fonts/ibm-plex-sans-arabic/OFL.txt', 'app/assets/manrope-OFL.txt']:
     if not (ROOT / name).is_file():
         findings.append('Missing public font licence: ' + name)
 
