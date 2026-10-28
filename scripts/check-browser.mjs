@@ -1086,6 +1086,30 @@ try {
     await nav('back'); await library();
     check('Browser All Apps has no installed fixtures', /TV/.test(await current.locator('#stage').innerText()) && !(await current.locator('[data-action^="apps.open."]').count()));
   });
+  await run('Home is painted once its first look is ready', async () => {
+    let hold = true;
+    const booting = () => current.evaluate(() => ({ booting: document.getElementById('stage').classList.contains('is-booting'), scene: getComputedStyle(document.getElementById('scene')).visibility, ready: ShoreQA.ready() }));
+    await page({ waitReady: false, settleNetwork: false }, p => p.route('**/assets/wallpapers/*.jpg', async route => {
+      while (hold && !p.isClosed()) await new Promise(resolve => setTimeout(resolve, 50));
+      try { await route.continue(); } catch (error) { if (!p.isClosed()) throw error; }
+    }));
+    await current.waitForTimeout(500);
+    let b = await booting();
+    check('Home stays hidden while its first photo loads', b.booting && b.scene === 'hidden' && !b.ready, b);
+    hold = false; await ready();
+    b = await booting();
+    check('Home appears with its fonts and photo in place', !b.booting && b.scene === 'visible' && b.ready, b);
+    await closePage();
+    hold = true;
+    await page({ waitReady: false, settleNetwork: false }, p => p.route('**/assets/wallpapers/*.jpg', async route => {
+      while (hold && !p.isClosed()) await new Promise(resolve => setTimeout(resolve, 50));
+      try { await route.continue(); } catch (error) { if (!p.isClosed()) throw error; }
+    }));
+    await current.waitForTimeout(4400);
+    b = await booting();
+    check('A stalled photo still shows Home after four seconds', !b.booting && b.scene === 'visible' && !b.ready, b);
+    hold = false;
+  });
   await run('HDMI input and the version 3 Home', async () => {
     const VIDEO = { connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 3 }], disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 2 }] };
     const calls = () => current.evaluate(() => __tv.calls);

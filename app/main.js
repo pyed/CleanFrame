@@ -95,6 +95,10 @@
 
   /* ---------- State ---------- */
   var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  /* Home stays hidden until its first look (fonts and photo) is ready, for at most BOOT_LIMIT, so the TV paints
+     it once. TVs that paint on the CPU spend about a second on each repaint of text in a newly loaded font,
+     and the remote waits meanwhile: fallback, Manrope and Arabic faces would otherwise cost three. */
+  var booting = true, BOOT_LIMIT = 4000;
   var S = {
     variant: 'B', geom: 'broad', c: null, stack: null,
     sel: null, selIdx: 0, lastUtil: 0, appsFocus: null, settingsFocus: 'background', appearanceFocus: 'bg', detailFocus: {},
@@ -1163,7 +1167,8 @@
   function render() {
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (isAr() ? ' lang-ar rtl' : '') + (ALMANAC && (S.c.date === 'show' || S.c.prayer === 'show') ? ' has-info' : '');
+    if (booting && (S.shown || S.lookError)) booting = false;
+    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (isAr() ? ' lang-ar rtl' : '') + (ALMANAC && (S.c.date === 'show' || S.c.prayer === 'show') ? ' has-info' : '') + (booting ? ' is-booting' : '');
     // Arabic mirrors Home with its photo (see style.css), so each offline-measured region keeps its text.
     if (stage.getAttribute('dir') !== (isAr() ? 'rtl' : 'ltr')) { stage.setAttribute('dir', isAr() ? 'rtl' : 'ltr'); document.documentElement.lang = isAr() ? 'ar' : 'en-AU'; }
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
@@ -2143,4 +2148,5 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews(); syncInput();
+  setTimeout(function () { if (booting) { booting = false; render(); } }, BOOT_LIMIT);
 })();

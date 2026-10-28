@@ -49,7 +49,9 @@ Prayer times show the next prayer with a countdown (`Asr in 2 h 38 min`) and the
 
 In Arabic, a glass card shows the three newest headlines from the selected source: Sabq (default), Al Arabiya, Al Jazeera, Sky News Arabia or Asharq Al-Awsat, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
 
-The news never holds up the remote. A background worker fetches and reads the feed and passes back only the titles; the card appears at once with a loading line, so arriving headlines replace text in place. New headlines wait until the remote has rested for 0.7 seconds, so they never land during a move. Sabq, Al Arabiya and Al Jazeera send no CORS headers. A desktop browser refuses them, so the browser preview's card says that the source is for the TV; a TV's packaged-app runtime is expected to read them, which still needs confirming on each TV.
+The news never holds up the remote. A background worker fetches and reads the feed and passes back only the titles; the card appears at once with a loading line, so arriving headlines replace text in place. New headlines wait until the remote has rested for 0.7 seconds, so they never land during a move. Sabq, Al Arabiya and Al Jazeera send no CORS headers. A desktop browser refuses them, so the browser preview's card says that the source is for the TV. The packaged app read all five sources on the Tizen 6.5 TV listed in [compatibility](compatibility.md).
+
+At startup, Home stays hidden until its fonts and photo are ready, for at most four seconds, and then appears complete. The TV draws it once, instead of once per font as each face arrives.
 
 ## Streaming apps
 

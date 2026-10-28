@@ -551,6 +551,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 
 /* Saved display choices alter content, not app identity or editing state. */
 .stage.is-reflow *{transition:none!important;animation:none!important}
+.stage.is-booting .scene{visibility:hidden}
 .dock .tile,.dock .plate{width:var(--tile-w);height:var(--tile-h)}
 .dock .track{height:var(--dock-h)}
 .dock .nudge{top:var(--nudge-top)}
