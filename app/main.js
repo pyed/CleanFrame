@@ -22,9 +22,14 @@
     { id: 'primevideo', name: 'Prime Video', mark: true, appId: 'org.tizen.primevideo' },
     { id: 'abciview', name: 'ABC iview', mark: true, appId: 'mWK87Xghap.ABCiview' },
     { id: 'sbs', name: 'SBS On Demand', mark: true, appId: 'OyE7OuxlUi.SBSOnDemand' },
-    { id: 'applemusic', name: 'Apple Music', mark: true, appId: 'org.tizen.apple.apple-music' }
+    { id: 'applemusic', name: 'Apple Music', mark: true, appId: 'org.tizen.apple.apple-music' },
+    { id: 'plex', name: 'Plex', mark: true, appId: 'kIciSQlYEM.plex' },
+    /* Not an app: switches the TV to an HDMI input. It follows the input the TV reports as connected, preferring HDMI 3. */
+    { id: 'hdmi', name: 'HDMI 3', mark: true, brand: 'input', input: 3 }
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
+  var INPUT_PORT = 3, INPUTS = ['hdmi'], DEFAULT_HOME = ['hdmi', 'youtube', 'plex', 'appletv'];
+  var OLD_HOME = ['stremio', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'abciview', 'sbs', 'applemusic'];
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Misty coast', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
   var ADAPTIVE_INK = window.CleanFrameAdaptiveInk || {};
   WALLS.forEach(function (w) { w.ut = w.ut || { tr: 'light', br: 'light' }; w.frostVeil = w.frostVeil || .12; });
@@ -382,26 +387,38 @@
     }
     return null;
   }
+  /* An installed app saved by its ID before CleanFrame had an entry for it (Plex) moves to that entry. */
+  function known(id) { for (var i = 0; i < PRIMARY_APPS.length; i++) if (PRIMARY_APPS[i].appId === id) return PRIMARY_APPS[i].id; return id; }
+  /* Version 3 replaces the nine-service default with HDMI 3, YouTube, Plex and Apple TV. A Home that held only
+     defaults takes the new set; one with other apps keeps them and gains the HDMI tile first. */
+  function homeV3(h) {
+    if (h.every(function (id) { return OLD_HOME.indexOf(id) >= 0 || DEFAULT_HOME.indexOf(id) >= 0; })) return DEFAULT_HOME.slice();
+    return h.indexOf('hdmi') < 0 && h.length < CAP ? ['hdmi'].concat(h) : h;
+  }
   function clean(saved) {
     var s = saved && typeof saved === 'object' ? saved : {}, modern = s.look && typeof s.look === 'object' ? s.look : s;
-    var legacyList = s.theme === 'list', h = [], recent = [], records = Array.isArray(s.appRecords) ? s.appRecords : [];
+    var legacyList = s.theme === 'list', h = [], recent = [], records = Array.isArray(s.appRecords) ? s.appRecords : [], before, renewed = false;
     records.slice(0, 256).forEach(function (a) {
-      if (!a || !safeId(a.id) || !safeId(a.appId) || typeof a.name !== 'string' || !a.name.trim() || app(a.id)) return;
+      if (!a || !safeId(a.id) || !safeId(a.appId) || typeof a.name !== 'string' || !a.name.trim() || app(a.id) || known(a.id) !== a.id) return;
       APPS.push({ id: a.id, appId: a.appId, name: a.name.slice(0, 160), brand: ['hbomax', 'spotify', 'tubi'].indexOf(a.brand) >= 0 ? a.brand : '', mark: ['hbomax', 'spotify', 'tubi'].indexOf(a.brand) >= 0, icon: safeIcon(a.icon) });
     });
     (Array.isArray(s.home) ? s.home : Array.isArray(s.dock) ? s.dock : []).forEach(function (id) {
-      if (!safeId(id) || h.indexOf(id) >= 0 || h.length >= CAP) return;
+      if (!safeId(id)) return;
+      id = known(id);
+      if (h.indexOf(id) >= 0 || h.length >= CAP) return;
       if (!app(id) && id.indexOf('.') > 0) APPS.push({ id: id, appId: id, name: id.split('.').pop(), mark: false });
       if (app(id)) h.push(id);
     });
-    if (!h.length) h = PRIMARY.slice();
-    (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { if (safeId(id) && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
+    if (!h.length) h = DEFAULT_HOME.slice();
+    else if (s.version === 2) { before = h; h = homeV3(h); renewed = !same(before, h); }
+    (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { id = safeId(id) ? known(id) : ''; if (id && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
     return {
       bg: pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : 'dock'),
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
-      home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
+      // A renewed Home starts on its new first tile, the HDMI input.
+      home: h, recent: recent, lastApp: !renewed && h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'),
       // Added after 0.6.1; older preferences gain English with the date and Riyadh prayer times shown.
       lang: pick(modern.lang, LOOK_VALUES.lang, 'en'), arfont: pick(modern.arfont, LOOK_VALUES.arfont, 'plexar'),
@@ -412,7 +429,7 @@
   function serialise(c) {
     var out = {};
     Object.keys(c).forEach(function (key) { out[key] = c[key]; });
-    out.version = 2; out.look = lookOf(c); out.dock = c.home.slice(); out.wallpaper = c.wall;
+    out.version = 3; out.look = lookOf(c); out.dock = c.home.slice(); out.wallpaper = c.wall;
     out.theme = c.layout === 'list' ? 'list' : 'shore';
     out.appRecords = [];
     c.home.concat(c.recent).forEach(function (key) {
@@ -529,7 +546,20 @@
     if (!a || busy) return;
     if (S.c.home.indexOf(id) >= 0) { c = next(S.c.home.slice(), S.c.recent.slice()); c.lastApp = id; write(c, 'Last app'); }
     S.press = id; S.lastLaunch = a.name;
-    perform(a.name, function (done) { FrameDevice.launchApp(a.appId, done); });
+    perform(a.name, function (done) { if (a.input) FrameDevice.input(a.input, done); else FrameDevice.launchApp(a.appId, done); });
+  }
+  /* The HDMI tile names the input it will open: HDMI 3 when the TV lists it as connected (or lists nothing
+     connected), otherwise the input that is. Checked when Home starts or returns; the query is asynchronous. */
+  function syncInput() {
+    if (!FrameDevice.inputs) return;
+    FrameDevice.inputs(function (err, ports) {
+      var a = app('hdmi'), port;
+      if (err || !a) return;
+      port = ports.connected.indexOf(INPUT_PORT) >= 0 || !ports.connected.length ? INPUT_PORT : ports.connected[0];
+      if (port === a.input) return;
+      a.input = port; a.name = 'HDMI ' + port; catalog.revision++;
+      render();
+    });
   }
   function refreshCatalog() {
     var request, oldFocus;
@@ -778,9 +808,10 @@
   };
 
   /* ---------- B: two-zone Home editor ---------- */
+  /* The HDMI input is not an installed app; once removed, it leads the addable list. */
   function otherGroups() {
     var rec = S.c.recent.filter(function (id) { return !onHome(id) && app(id); });
-    return { recent: rec, rest: ALPHA.filter(function (id) { return !onHome(id) && rec.indexOf(id) < 0; }) };
+    return { recent: rec, rest: INPUTS.concat(ALPHA).filter(function (id) { return !onHome(id) && rec.indexOf(id) < 0; }) };
   }
   function otherList() { var o = otherGroups(); return o.recent.concat(o.rest); }
   function editorCut() { return 5; }
@@ -1077,6 +1108,7 @@
   /* ---------- Dispatch ---------- */
   function norm() { var t = top(), v = V[t.id]; if (v.norm) v.norm(t); }
   function press(k) {
+    lastPress = Date.now();
     norm();
     var t = top();
     V[t.id].key(t, k);
@@ -1501,44 +1533,61 @@
 
   /* ---------- Headlines (Arabic only) ---------- */
   /* Card origins in Home's own coordinates; the Arabic mirror moves them to screen left. */
-  var NEWS_BOX = { dock: { x: 1168, y: 208, width: 640 }, list: { x: 1208, y: 360, width: 600 } }, NEWS_SHOWN = 3;
-  var news = { source: null, items: [], loading: false, error: null, fetched: 0, due: 0, request: 0, timer: 0, key: '' };
+  var NEWS_BOX = { dock: { x: 1168, y: 208, width: 640 }, list: { x: 1208, y: 360, width: 600 } }, NEWS_SHOWN = 3, NEWS_QUIET = 700;
+  var news = { source: null, items: [], loading: false, error: null, fetched: 0, due: 0, request: 0, timer: 0, key: '', arrived: null, paint: 0 };
+  var lastPress = 0;
   function newsActive() { return !!NEWS && isAr() && S.c.news !== 'off' && !!newsSource(S.c.news); }
+  /* The card is there from the start, so arriving headlines only replace text: no new layer or field image. */
   function renderNews() {
-    var on = newsActive() && (news.items.length > 0 || !!news.error), box = NEWS_BOX[S.c.layout], header, key, d;
+    var on = newsActive(), box = NEWS_BOX[S.c.layout], header, key, d, body;
     newsEl.className = 'news' + (on ? ' is-on' : '');
     if (!on) return;
     newsEl.style.left = box.x + 'px'; newsEl.style.top = box.y + 'px'; newsEl.style.width = box.width + 'px';
     fieldTransform(newsField, box.x, box.y, box.width, 360);
     d = new Date(news.fetched);
     header = '<span class="news-source">' + esc(newsName(news.source)) + '</span>' + (news.fetched ? '<span class="news-time">' + esc(tx('Updated {time}', { time: (d.getHours() % 12 || 12) + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() })) + '</span>' : '');
-    key = lang() + '|' + header + '|' + (news.items.length ? news.items.slice(0, NEWS_SHOWN).map(function (item) { return item.title; }).join('\n') : news.error);
+    body = news.items.length ? '<ul class="news-list">' + news.items.slice(0, NEWS_SHOWN).map(function (item) { return '<li class="news-item">' + esc(item.title) + '</li>'; }).join('') + '</ul>'
+      : news.error ? '<p class="news-error">' + esc(tx(news.error)) + '</p>' : '<p class="news-wait">' + esc(tx('Loading the news…')) + '</p>';
+    key = lang() + '|' + header + '|' + body;
     if (key === news.key) return;
     news.key = key;
-    newsBody.innerHTML = '<div class="flip"><p class="news-head">' + header + '</p>' + (news.items.length
-      ? '<ul class="news-list">' + news.items.slice(0, NEWS_SHOWN).map(function (item) { return '<li class="news-item">' + esc(item.title) + '</li>'; }).join('') + '</ul>'
-      : '<p class="news-error">' + esc(tx(news.error)) + '</p>') + '</div>';
+    newsBody.innerHTML = '<div class="flip"><p class="news-head">' + header + '</p>' + body + '</div>';
   }
   /* Fetch only while Arabic Home can be seen: on change, then every 15 minutes (2 after a failure). */
   function syncNews() {
     clearTimeout(news.timer); news.timer = 0;
     if (!newsActive()) return;
-    if (news.source !== S.c.news) { news.source = S.c.news; news.items = []; news.error = null; news.fetched = 0; news.due = 0; news.request++; news.loading = false; news.key = ''; }
+    if (news.source !== S.c.news) {
+      news.source = S.c.news; news.items = []; news.error = null; news.fetched = 0; news.due = 0; news.request++; news.loading = false; news.key = '';
+      news.arrived = null; clearTimeout(news.paint); news.paint = 0;
+    }
     if (document.hidden || news.loading) return;
     if (Date.now() >= news.due) { loadNews(); return; }
     news.timer = setTimeout(syncNews, news.due - Date.now() + 50);
   }
+  /* The feed is fetched and read off the main thread (news.js); the reply holds a few short titles. */
   function loadNews() {
-    var request = ++news.request, source = news.source;
+    var request = ++news.request;
     news.loading = true;
-    NEWS.load(source, function (err, items) {
+    NEWS.load(news.source, function (err, items) {
       if (request !== news.request) return;
       news.loading = false;
-      if (err) { news.error = err.message; news.due = Date.now() + NEWS_RETRY; }
-      else { news.items = items; news.error = null; news.fetched = Date.now(); news.due = news.fetched + NEWS_REFRESH; }
-      if (top().id === 'home' || isSettingsDetail(top())) renderNews();
+      news.arrived = err ? { error: err.message } : { items: items, at: Date.now() };
+      news.due = Date.now() + (err ? NEWS_RETRY : NEWS_REFRESH);
+      showNews();
       syncNews();
     });
+  }
+  /* New headlines wait until the remote has been still for a moment, so they never land during a move. */
+  function showNews() {
+    var wait = lastPress + NEWS_QUIET - Date.now(), arrived = news.arrived;
+    clearTimeout(news.paint); news.paint = 0;
+    if (!arrived) return;
+    if (wait > 0) { news.paint = setTimeout(showNews, wait); return; }
+    news.arrived = null;
+    if (arrived.error) news.error = arrived.error;
+    else { news.items = arrived.items; news.error = null; news.fetched = arrived.at; }
+    if (top().id === 'home' || isSettingsDetail(top())) renderNews();
   }
 
   /* Sheets: a frame is built once per view/mode; fill() updates its slots. Persistent
@@ -2050,7 +2099,7 @@
     else {
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
-      after(); updateClock(); focusStage();
+      after(); updateClock(); focusStage(); syncInput();
     }
   });
   window.addEventListener('resize', fit);
@@ -2093,5 +2142,5 @@
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
   initialise();
   setLook({}, { transient: true, startup: true });
-  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews();
+  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews(); syncInput();
 })();

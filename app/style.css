@@ -680,6 +680,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .news-item+.news-item{margin-top:16px;padding-top:16px;border-top:1px solid rgba(246,241,231,.16)}
 .bg-light .news-item+.news-item{border-top-color:var(--line)}
 .news-error{margin-top:12px;font-size:26px;line-height:36px;opacity:.8}
+.news-wait{margin-top:12px;font-size:26px;line-height:36px;opacity:.56}
 
 /* Settings overview: six groups are visible; the window scrolls with focus. */
 .settings-overview{height:712px;overflow:hidden}

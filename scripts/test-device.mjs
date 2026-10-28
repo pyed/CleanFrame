@@ -5,15 +5,20 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../app/device.js', import.meta.url), 'utf8');
-function harness() {
+function harness({ video } = {}) {
   let now = 0, next = 0;
-  const timers = new Map(), requests = [], launches = [];
+  const timers = new Map(), requests = [], launches = [], switches = [];
   const application = {
-    getCurrentApplication: () => ({ appInfo: { id: 'Owner12345.Home' } }),
+    getCurrentApplication: () => ({ appInfo: { id: 'Owner12345.Home' }, hide: () => launches.push({ id: 'hide' }) }),
     getAppsInfo: (ok, fail) => requests.push({ ok, fail }),
     launch: (id, ok, fail) => launches.push({ id, ok, fail })
   };
   const window = { tizen: { application } };
+  // The TV's video sources and window, when a test supplies them.
+  if (video) {
+    window.tizen.systeminfo = { getPropertyValue: (name, ok) => { assert.equal(name, 'VIDEOSOURCE'); ok(video); } };
+    window.tizen.tvwindow = { setSource: (source, ok, fail) => switches.push({ source, ok, fail }) };
+  }
   vm.runInNewContext(source, {
     window, tizen: window.tizen,
     setTimeout: (callback, delay) => { const id = ++next; timers.set(id, { callback, at: now + delay }); return id; },
@@ -23,7 +28,7 @@ function harness() {
     now += ms;
     for (const [id, timer] of timers) if (timer.at <= now) { timers.delete(id); timer.callback(); }
   }
-  return { device: window.FrameDevice, requests, launches, advance };
+  return { device: window.FrameDevice, requests, launches, switches, advance };
 }
 
 test('a 500-app catalogue can arrive after the old eight-second deadline', () => {
@@ -78,4 +83,59 @@ test('launch keeps its eight-second deadline independently of discovery', () => 
   assert.match(results[0].message, /did not respond/);
   h.launches[0].ok();
   assert.equal(results.length, 1);
+});
+
+test('an HDMI input on standby is selected with the TV’s own source, then the viewer opens', () => {
+  const standby = { type: 'HDMI', number: 3 };
+  const h = harness({ video: { connected: [{ type: 'TV', number: 1 }], disconnected: [{ type: 'HDMI', number: 1 }, standby] } }), results = [];
+  h.device.input(3, error => results.push(error));
+  assert.equal(h.switches.length, 1);
+  assert.equal(h.switches[0].source, standby);
+  h.switches[0].ok();
+  assert.equal(h.launches[0].id, 'org.tizen.tv-viewer');
+  h.launches[0].ok();
+  assert.deepEqual(results, [null]);
+});
+
+test('without the viewer, CleanFrame hides to uncover the new input', () => {
+  const h = harness({ video: { connected: [{ type: 'HDMI', number: 3 }], disconnected: [] } }), results = [];
+  h.device.input(3, error => results.push(error));
+  h.switches[0].ok();
+  h.launches[0].fail({ name: 'NotFoundError', message: 'No viewer' });
+  assert.deepEqual(h.launches.map(l => l.id), ['org.tizen.tv-viewer', 'hide']);
+  assert.deepEqual(results, [null]);
+});
+
+test('an input the TV does not list fails without switching', () => {
+  const h = harness({ video: { connected: [{ type: 'HDMI', number: 1 }], disconnected: [] } }), results = [];
+  h.device.input(3, error => results.push(error));
+  assert.equal(h.switches.length, 0);
+  assert.equal(results.length, 1);
+  assert.match(results[0].message, /does not list this HDMI input/);
+});
+
+test('a source change that never answers finishes once at the deadline', () => {
+  const h = harness({ video: { connected: [{ type: 'HDMI', number: 3 }], disconnected: [] } }), results = [];
+  h.device.input(3, error => results.push(error));
+  h.advance(8000);
+  assert.equal(results.length, 1);
+  assert.match(results[0].message, /did not respond/);
+  h.switches[0].ok();
+  assert.equal(results.length, 1);
+  assert.equal(h.launches.length, 0);
+});
+
+test('inputs report connected and listed HDMI numbers only', () => {
+  const h = harness({ video: { connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 2 }], disconnected: [{ type: 'HDMI', number: 3 }, { type: 'AV', number: 1 }] } });
+  let ports;
+  h.device.inputs((error, value) => { assert.equal(error, null); ports = value; });
+  assert.deepEqual(JSON.parse(JSON.stringify(ports)), { connected: [2], listed: [2, 3] });
+});
+
+test('without the TV window API, an input asks for the TV', () => {
+  const h = harness(), results = [];
+  h.device.input(3, error => results.push(error));
+  assert.match(results[0].message, /Open CleanFrame on the TV/);
+  h.device.inputs(error => results.push(error));
+  assert.match(results[1].message, /Open CleanFrame on the TV/);
 });

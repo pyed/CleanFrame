@@ -6,8 +6,10 @@
     disneyplus: 'MCmYXNxgcu.DisneyPlus', youtube: '9Ur5IzDKqV.TizenYouTube',
     appletv: 'com.samsung.tv.aria-video', primevideo: 'org.tizen.primevideo',
     abciview: 'mWK87Xghap.ABCiview', sbs: 'OyE7OuxlUi.SBSOnDemand',
-    applemusic: 'org.tizen.apple.apple-music'
+    applemusic: 'org.tizen.apple.apple-music', plex: 'kIciSQlYEM.plex'
   };
+  // The TV's own viewer shows whichever source the TV is on.
+  var VIEWER = 'org.tizen.tv-viewer';
   var STREAMING = ['as6cYRgkPy.Binge', '73iTZRTc34.Stan', '5b8c3eb16b.BeamCTVDev',
     'cj37Ni3qXM.HBONow', 'LBUAQX1exg.Hulu', 'gzcc4LRFBF.Peacock', 'rJyOSqC6Up.CBSAllAccess',
     'Rk72oKFsRS.OtterKidsProd', '70fRFUwYlD.OtterGAProd', 'PvWgqxV3Xa.YouTubeTV',
@@ -56,6 +58,48 @@
       api().launchAppControl(control, 'org.tizen.art-app', function () { finish(null); }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
+  /* HDMI sources the TV lists. A device on standby can be listed as disconnected and can still be selected. */
+  function videoSources(done) {
+    var info = window.tizen && window.tizen.systeminfo;
+    if (!info) { unavailable(done); return; }
+    var finish = bounded(done);
+    try {
+      info.getPropertyValue('VIDEOSOURCE', function (value) {
+        var hdmi = function (list) { return (list || []).filter(function (s) { return s && s.type === 'HDMI' && s.number > 0; }); };
+        finish(null, { connected: hdmi(value && value.connected), disconnected: hdmi(value && value.disconnected) });
+      }, function (err) { finish(failure(err)); });
+    } catch (err) { finish(failure(err)); }
+  }
+  function inputs(done) {
+    videoSources(function (err, sources) {
+      var number = function (s) { return s.number; };
+      if (err) done(err); else done(null, { connected: sources.connected.map(number), listed: sources.connected.concat(sources.disconnected).map(number) });
+    });
+  }
+  /* Put the TV on an HDMI input, then bring up the viewer to show it. Without the viewer,
+     hiding CleanFrame uncovers the TV's picture, now on that input. */
+  function input(port, done) {
+    var tv = window.tizen, ended = false, finish;
+    if (!api() || !tv.tvwindow) { unavailable(done); return; }
+    finish = bounded(function (err) { ended = true; done(err); });
+    videoSources(function (err, sources) {
+      var source = null;
+      if (err) { finish(err); return; }
+      sources.connected.concat(sources.disconnected).forEach(function (s) { if (!source && s.number === port) source = s; });
+      if (!source) { finish({ message: 'The TV does not list this HDMI input.', detail: 'Check the cable, or choose the input from the TV’s Source menu.' }); return; }
+      try {
+        tv.tvwindow.setSource(source, function () {
+          // A late switch after the deadline does not open the viewer over the error already shown.
+          if (ended) return;
+          try {
+            api().launch(VIEWER, function () { finish(null); }, function () {
+              try { api().getCurrentApplication().hide(); finish(null); } catch (hideErr) { finish(failure(hideErr)); }
+            });
+          } catch (launchErr) { finish(failure(launchErr)); }
+        }, function (sourceErr) { finish(failure(sourceErr)); });
+      } catch (sourceErr) { finish(failure(sourceErr)); }
+    });
+  }
   function home(done) { launchApp('com.samsung.tv.csfs', done); }
   function settings(done) { launchApp('com.samsung.tv.coba.setting', done); }
   function apps(done) {
@@ -80,5 +124,5 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, input: input, inputs: inputs, art: art, home: home, settings: settings, apps: apps };
 }());

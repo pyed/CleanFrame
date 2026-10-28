@@ -47,11 +47,17 @@ The clock column can show a date line and prayer times, each controlled under Se
 
 Prayer times show the next prayer with a countdown (`Asr in 2 h 38 min`) and the day's five times, the next one emphasised; on Fridays Dhuhr is labelled Jumuah. Times are calculated offline in 12-hour form for the chosen city with its official method: Umm al-Qura for the Saudi cities, and the UAE, Qatar and Kuwait methods for those cities, with the standard Asr. They use the city's fixed UTC offset, so the countdown stays correct even if the TV is set to another time zone. The lines refresh with the clock at each minute. A soft photo shade sits under them, mirrored with the photo.
 
-In Arabic, a glass card shows the three newest headlines from the selected source: CNN Arabic (default), Sky News Arabia, Asharq Al-Awsat or DW Arabic, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
+In Arabic, a glass card shows the three newest headlines from the selected source: Sabq (default), Al Arabiya, Al Jazeera, Sky News Arabia or Asharq Al-Awsat, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
+
+The news never holds up the remote. A background worker fetches and reads the feed and passes back only the titles; the card appears at once with a loading line, so arriving headlines replace text in place. New headlines wait until the remote has rested for 0.7 seconds, so they never land during a move. Sabq, Al Arabiya and Al Jazeera send no CORS headers. A desktop browser refuses them, so the browser preview's card says that the source is for the TV; a TV's packaged-app runtime is expected to read them, which still needs confirming on each TV.
 
 ## Streaming apps
 
-The nine default apps keep their known native IDs. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
+Home starts with HDMI 3, YouTube, Plex and Apple TV. The known services, Plex included, keep their native IDs and bundled marks. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
+
+## HDMI input
+
+The first Home tile is not an app: OK puts the TV on that HDMI input and shows it, in one press. It uses the public `tizen.tvwindow.setSource` API with the TV's own source record from `tizen.systeminfo` `VIDEOSOURCE`, then opens the TV's viewer (`org.tizen.tv-viewer`), which shows the current source. If the viewer cannot open, CleanFrame hides to uncover the TV's picture. The tile names the input it opens: HDMI 3 when the TV lists HDMI 3 as connected or lists nothing as connected, otherwise the connected input. A device on standby can be listed as disconnected and can still be selected. It is checked when Home starts and each time it returns. An input the TV does not list, or a browser preview, produces a real error. The tile can be moved or removed like an app; once removed, it leads Not on Home in the editor. The switch has not yet been observed on a CleanFrame TV; see [development](development.md).
 
 ## All apps
 

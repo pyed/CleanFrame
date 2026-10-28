@@ -31,6 +31,7 @@ The public preview uses the included Manrope, Geist and Newsreader fonts.
 - Use a photograph, light or dark background, with a simple 12-hour clock.
 - Adjust typography, focus and glass materials through the same Settings interface.
 - Choose and reorder Home apps; discover installed apps on the TV.
+- Switch the TV to an HDMI input, such as a PC on HDMI 3, from the first Home tile.
 - Select from fifteen wallpapers and save your preferences locally.
 - Switch to Arabic for a mirrored right-to-left Home with Hijri and Gregorian dates, prayer times and optional headlines.
 

@@ -7,6 +7,7 @@ const KEY = 'cleanframe.home.v1';
 const PRIMARY = ['stremio', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'abciview', 'sbs', 'applemusic'];
 const IDS = ['IkWsFHtOY9.Stremio', 'org.tizen.netflix-app', 'MCmYXNxgcu.DisneyPlus', '9Ur5IzDKqV.TizenYouTube', 'com.samsung.tv.aria-video', 'org.tizen.primevideo', 'mWK87Xghap.ABCiview', 'OyE7OuxlUi.SBSOnDemand', 'org.tizen.apple.apple-music'];
 const NAMES = ['Stremio', 'Netflix', 'Disney+', 'YouTube', 'Apple TV', 'Prime Video', 'ABC iview', 'SBS On Demand', 'Apple Music'];
+const NEW_HOME = ['hdmi', 'youtube', 'plex', 'appletv'], PLEX = 'kIciSQlYEM.plex';
 const EXTRA = 'AbCdEf1234.FamilyApp', SPOTIFY = 'rJeHak5zRg.Spotify';
 const UNSAFE_NAME = 'Family <img src=x onerror="window.__catalogXss=1"> & TV';
 const CATALOG = IDS.map((id, i) => ({ id, name: NAMES[i], show: true, iconPath: '' })).concat([
@@ -22,17 +23,22 @@ const out = root + '.local/qa/';
 mkdirSync(out, { recursive: true });
 const sourceFiles = ['app/main.js', 'app/device.js', 'app/index.html', 'app/style.css', 'app/config.xml', 'app/assets/wallpapers/SOURCES.json', 'app/assets/wallpapers/catalog.js', 'app/assets/adaptive-ink.js', 'app/assets/icons/metrics.js', 'app/i18n.js', 'app/almanac.js', 'app/news.js', 'app/assets/hijri.js'];
 // Arabic headlines come from a fixture feed: no section reaches a real news source.
-const FEED_HOSTS = ['arabic.cnn.com', 'www.skynewsarabia.com', 'aawsat.com', 'rss.dw.com'];
+const FEED_HOSTS = ['sabq.org', 'www.alarabiya.net', 'www.aljazeera.net', 'www.skynewsarabia.com', 'aawsat.com'];
 const NEWS_TITLES = ['الخبر الأول: "عاجل" اليوم', 'الخبر الثاني', 'الخبر الثالث', 'الخبر الرابع'];
 const NEWS_FEED = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>QA</title>'
   + [[2, NEWS_TITLES[2]], [0, 'الخبر الأول: <b>&quot;عاجل&quot;</b> اليوم<img src=x onerror="window.__newsXss=1">'], [3, NEWS_TITLES[3]], [1, NEWS_TITLES[1]]]
     .map(([age, title]) => '<item><title><![CDATA[' + title + ']]></title><pubDate>' + new Date(Date.UTC(2026, 9, 28, 8) - age * 600000).toUTCString() + '</pubDate></item>').join('')
   + '</channel></rss>';
-async function routeFeeds(p, requests = [], failing = () => false) {
-  for (const host of FEED_HOSTS) await p.route('https://' + host + '/**', route => {
+// The news worker makes these requests, so the whole context is routed. A delay holds the reply.
+async function routeFeeds(p, requests = [], failing = () => false, delay = () => 0) {
+  for (const host of FEED_HOSTS) await p.context().route('https://' + host + '/**', async route => {
     requests.push(route.request().url());
-    if (failing(route.request().url())) return route.abort('failed');
-    return route.fulfill({ status: 200, contentType: 'application/rss+xml; charset=utf-8', headers: { 'access-control-allow-origin': '*' }, body: NEWS_FEED });
+    try {
+      if (failing(route.request().url())) return await route.abort('failed');
+      const wait = delay();
+      if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+      return await route.fulfill({ status: 200, contentType: 'application/rss+xml; charset=utf-8', headers: { 'access-control-allow-origin': '*' }, body: NEWS_FEED });
+    } catch (error) { if (!p.isClosed()) throw error; }
   });
 }
 const hashes = () => Object.fromEntries(sourceFiles.map(f => [f, createHash('sha256').update(readFileSync(root + f)).digest('hex')]));
@@ -56,7 +62,7 @@ async function run(name, fn) {
 async function closePage() { if (current) { current.__closing = true; await current.close(); current = null; } }
 
 // Production still calls its unmodified device.js adapter.
-function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure, noFontAPI, storageFailure, currentAppId, initiallyHidden, pauseHiddenFrames, rejectDecode }) {
+function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure, noFontAPI, storageFailure, currentAppId, initiallyHidden, pauseHiddenFrames, rejectDecode, inputs, viewerFailure }) {
   if (!sessionStorage.getItem('__cleanframe_seeded')) {
     if (seed !== undefined) localStorage.setItem('cleanframe.home.v1', typeof seed === 'string' ? seed : JSON.stringify(seed));
     if (legacy !== undefined) localStorage.setItem('cleanframe.shore.v1', typeof legacy === 'string' ? legacy : JSON.stringify(legacy));
@@ -90,12 +96,12 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
   if (rejectDecode) HTMLImageElement.prototype.decode = function () { return Promise.reject(new DOMException('Synthetic decode rejection')); };
   if (noFontAPI) Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   if (!mock) return;
-  window.__tv = { catalog, catalogFailure: !!catalogFailure, launchFailure: false, holdCatalog: false, pending: [], calls: [], catalogCalls: 0 };
+  window.__tv = { catalog, catalogFailure: !!catalogFailure, launchFailure: false, holdCatalog: false, pending: [], calls: [], catalogCalls: 0, sourceQueries: 0 };
   window.tizen = {
     ApplicationControlData: function (key, value) { this.key = key; this.value = value; },
     ApplicationControl: function (operation, uri, mime, category, data) { Object.assign(this, { operation, uri, mime, category, data }); },
     application: {
-      getCurrentApplication() { return { appInfo: { id: currentAppId || 'nClrkHome1.FrameHome' } }; },
+      getCurrentApplication() { return { appInfo: { id: currentAppId || 'nClrkHome1.FrameHome' }, hide() { window.__tv.calls.push({ method: 'hide' }); } }; },
       getAppsInfo(ok, fail) {
         const tv = window.__tv;
         tv.catalogCalls++;
@@ -104,7 +110,7 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
       },
       launch(id, ok, fail) {
         const tv = window.__tv; tv.calls.push({ method: 'launch', id });
-        setTimeout(() => tv.launchFailure ? fail({ name: 'NotFoundError', message: 'App unavailable for QA' }) : ok(), 0);
+        setTimeout(() => tv.launchFailure || viewerFailure && id === 'org.tizen.tv-viewer' ? fail({ name: 'NotFoundError', message: 'App unavailable for QA' }) : ok(), 0);
       },
       launchAppControl(control, id, ok, fail) {
         const tv = window.__tv; tv.calls.push({ method: 'launchAppControl', id, control });
@@ -112,6 +118,10 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
       }
     }
   };
+  // The TV's video sources, only when a section supplies them (public systeminfo and tvwindow APIs).
+  if (!inputs) return;
+  window.tizen.systeminfo = { getPropertyValue(name, ok) { window.__tv.sourceQueries++; setTimeout(() => ok(JSON.parse(JSON.stringify(inputs))), 0); } };
+  window.tizen.tvwindow = { setSource(source, ok) { window.__tv.calls.push({ method: 'setSource', source: { type: source.type, number: source.number } }); setTimeout(ok, 0); } };
 }
 async function page(options = {}, setup) {
   current = await preview.browser.newPage({ viewport: { width: 1920, height: 1080 }, ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}) });
@@ -1076,16 +1086,65 @@ try {
     await nav('back'); await library();
     check('Browser All Apps has no installed fixtures', /TV/.test(await current.locator('#stage').innerText()) && !(await current.locator('[data-action^="apps.open."]').count()));
   });
+  await run('HDMI input and the version 3 Home', async () => {
+    const VIDEO = { connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 3 }], disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 2 }] };
+    const calls = () => current.evaluate(() => __tv.calls);
+    await page({ seed: undefined, inputs: VIDEO });
+    let s = await state();
+    check('A new Home holds HDMI 3, YouTube, Plex and Apple TV, starting on HDMI 3', same(s.dock, NEW_HOME) && s.selected === 'hdmi' && (await call('where')).focus === 'HDMI 3', s);
+    check('The input and Plex use their own marks', await current.evaluate(() => ['input', 'plex'].every(id => document.querySelector('.tile [data-mark="' + id + '"]:not(.is-bad)'))));
+    await nav('ok'); await current.waitForFunction(() => __tv.calls.length >= 2);
+    check('OK puts the TV on HDMI 3, then opens the TV viewer', same(await calls(), [{ method: 'setSource', source: { type: 'HDMI', number: 3 } }, { method: 'launch', id: 'org.tizen.tv-viewer' }]), await calls());
+    check('Switching stays on Home without a message', (await call('where')).view === 'home' && (await stored()).lastApp === 'hdmi');
+    await closePage();
+    await page({ seed: undefined, inputs: VIDEO, viewerFailure: true });
+    await nav('ok'); await current.waitForFunction(() => __tv.calls.some(c => c.method === 'hide'));
+    check('Without the viewer, CleanFrame steps aside to uncover the input', same((await calls()).map(c => c.method), ['setSource', 'launch', 'hide']) && (await call('where')).view === 'home', await calls());
+    await closePage();
+    await page({ seed: undefined, inputs: { connected: [{ type: 'HDMI', number: 2 }], disconnected: [{ type: 'HDMI', number: 3 }] } });
+    await current.waitForFunction(() => ShoreQA.where().focus === 'HDMI 2');
+    await nav('ok'); await current.waitForFunction(() => __tv.calls.length >= 2);
+    check('With HDMI 3 asleep, the tile follows the connected input', (await calls())[0].source.number === 2, await calls());
+    await closePage();
+    await page({ seed: undefined, inputs: { connected: [], disconnected: [{ type: 'HDMI', number: 1 }] } });
+    await nav('ok'); await current.waitForFunction(() => ShoreQA.where().view === 'message');
+    check('An input the TV does not list says so', (await current.locator('#stage').innerText()).includes('The TV does not list this HDMI input.') && (await calls()).length === 0);
+    await closePage();
+    await page({ seed: undefined });
+    await nav('ok'); await current.waitForFunction(() => ShoreQA.where().view === 'message');
+    check('Without the TV window API the tile asks for the TV', (await current.locator('#stage').innerText()).includes('Open CleanFrame on the TV to use this control.'));
+    await closePage();
+    await page({ seed: { ...baseline(), version: 2 } });
+    s = await state();
+    check('A version 2 Home of defaults takes the new set and starts on HDMI 3', same(s.dock, NEW_HOME) && s.selected === 'hdmi' && (await stored()).version === 3, s);
+    await closePage();
+    await page({ seed: { ...baseline({ dock: ['youtube', PLEX], lastApp: PLEX }), version: 2, appRecords: [{ id: PLEX, appId: PLEX, name: 'Plex - Free Movies & TV', brand: '', icon: '' }] } });
+    s = await state();
+    check('Plex saved by its app ID joins the new set', same(s.dock, NEW_HOME) && !(await stored()).appRecords.length, s);
+    await closePage();
+    await page({ seed: { ...baseline({ dock: ['netflix', EXTRA], lastApp: EXTRA }), version: 2, appRecords: [{ id: EXTRA, appId: EXTRA, name: 'Family', brand: '', icon: '' }] } });
+    s = await state();
+    check('A customised version 2 Home keeps its apps and gains HDMI 3 first', same(s.dock, ['hdmi', 'netflix', EXTRA]) && s.selected === 'hdmi', s);
+    await closePage();
+    await page({ seed: { ...baseline({ dock: ['youtube'], lastApp: 'youtube' }), version: 3 }, catalog: CATALOG.concat([{ id: PLEX, name: 'Plex - Free Movies ＆ TV', show: true, iconPath: '' }]) });
+    check('A version 3 Home is left as saved', same((await state()).dock, ['youtube']));
+    await editor();
+    const adds = (await call('actions')).filter(a => a.startsWith('editor.add.'));
+    check('A removed HDMI tile leads the addable list', adds[0] === 'editor.add.hdmi' && adds.includes('editor.add.plex'), adds);
+    await act('editor.add.hdmi');
+    check('The HDMI tile can be added back', same((await stored()).dock, ['youtube', 'hdmi']));
+    check('Installed Plex is recognised by its brand', (await state()).catalog.ids.includes('plex') && !(await state()).catalog.ids.includes(PLEX));
+  });
   await run('Language and widget preferences migrate safely', async () => {
     const requests = [];
     await page();
     const s = await state(), saved = await stored();
-    check('Earlier preferences gain English with the date and Riyadh prayer times', s.lang === 'en' && s.date === 'show' && s.prayer === 'show' && s.city === 'riyadh' && s.news === 'cnn' && s.display.dir === 'ltr', s);
-    check('New choices are stored beside the existing keys', saved.look.lang === 'en' && saved.look.arfont === 'plexar' && saved.city === 'riyadh' && same(saved.dock, PRIMARY) && saved.version === 2, saved);
+    check('Earlier preferences gain English with the date and Riyadh prayer times', s.lang === 'en' && s.date === 'show' && s.prayer === 'show' && s.city === 'riyadh' && s.news === 'sabq' && s.display.dir === 'ltr', s);
+    check('New choices are stored beside the existing keys', saved.look.lang === 'en' && saved.look.arfont === 'plexar' && saved.city === 'riyadh' && same(saved.dock, PRIMARY) && saved.version === 3, saved);
     await closePage();
     await page({ seed: { ...baseline(), look: { lang: 'xx', arfont: 'constructor' }, date: 'maybe', prayer: 1, city: '__proto__', news: 'elsewhere' } }, p => routeFeeds(p, requests));
     const bad = await state();
-    check('Invalid language and widget values recover their defaults', bad.lang === 'en' && bad.arfont === 'plexar' && bad.date === 'show' && bad.prayer === 'show' && bad.city === 'riyadh' && bad.news === 'cnn', bad);
+    check('Invalid language and widget values recover their defaults', bad.lang === 'en' && bad.arfont === 'plexar' && bad.date === 'show' && bad.prayer === 'show' && bad.city === 'riyadh' && bad.news === 'sabq', bad);
     await closePage();
     await page({ seed: baseline({ look: { lang: 'ar', arfont: 'thmanyah' } }) }, p => routeFeeds(p, requests));
     const ar = await state();
@@ -1205,25 +1264,37 @@ try {
     check('Makkah matches the official Umm al-Qura timetable', same(info.times, ['الفجر 4:58', 'الظهر 12:09', 'العصر 3:32', 'المغرب 6:05', 'العشاء 7:35']) && info.next === 'الظهر بعد 4 ساعات و39 دقيقة', info);
   });
   await run('Arabic headlines from the selected source', async () => {
-    const requests = []; let failing = false;
-    await page({}, p => routeFeeds(p, requests, () => failing));
+    const requests = []; let failing = false, hold = 0;
+    await page({}, p => routeFeeds(p, requests, () => failing, () => hold));
     await current.waitForTimeout(200);
     check('English requests no news', requests.length === 0 && !(await newsCard()).on, requests);
+    hold = 600;
     await look({ lang: 'ar' });
-    await current.waitForFunction(() => ShoreQA.state().headlines.titles.length > 0);
     let card = await newsCard();
-    check('CNN Arabic is the default source', requests.length === 1 && requests[0].startsWith('https://arabic.cnn.com/') && card.source === 'سي إن إن بالعربية', { requests, card });
+    check('The card waits in place while the first headlines load', card.on && card.items.length === 0 && !card.error && await current.evaluate(() => document.querySelector('#news .news-wait')?.textContent === 'جارٍ تحميل الأخبار…'), card);
+    // Keep pressing through the reply: headlines land only once the remote rests, and every press is handled.
+    let presses = 0;
+    for (const started = Date.now(); Date.now() - started < 1100; presses++) {
+      await nav(presses % 2 ? 'left' : 'right');
+      check('Headlines do not land during a move', (await state()).headlines.titles.length === 0);
+      await current.waitForTimeout(120);
+    }
+    check('The reply arrived while the remote moved', !(await state()).headlines.loading && presses >= 6, presses);
+    await current.waitForFunction(() => ShoreQA.state().headlines.titles.length > 0);
+    hold = 0;
+    card = await newsCard();
+    check('Sabq is the default source', requests.length === 1 && requests[0].startsWith('https://sabq.org/') && card.source === 'سبق', { requests, card });
     check('The three newest headlines show as plain text', same(card.items, NEWS_TITLES.slice(0, 3)) && card.images === 0 && !(await current.evaluate(() => window.__newsXss)), card);
     const box = await stageBox('#news');
     check('Headlines sit opposite the clock, clear of the Dock', box.right < 960 && box.bottom < (await stageBox('#dock')).top, box);
     check('The headline card uses pre-rendered glass', (await noLiveFilters()).length === 0 && await current.evaluate(() => document.getElementById('newsFieldImg').naturalWidth > 0));
     await settingsGroup('widgets'); await act('widgets.news');
-    check('News offers Off and four sources', same((await radios()).map(r => r.action).sort(), ['choice.news.aawsat', 'choice.news.cnn', 'choice.news.dw', 'choice.news.off', 'choice.news.sky']));
+    check('News offers Off and five sources', same((await radios()).map(r => r.action).sort(), ['choice.news.aawsat', 'choice.news.alarabiya', 'choice.news.aljazeera', 'choice.news.off', 'choice.news.sabq', 'choice.news.sky']));
     await choice('news', 'sky');
     await current.waitForFunction(() => ShoreQA.state().headlines.source === 'sky' && ShoreQA.state().headlines.titles.length > 0);
     check('Choosing Sky News Arabia fetches it once', requests.filter(url => url.includes('skynewsarabia')).length === 1 && (await stored()).news === 'sky');
-    current.__expectedFailures.push('rss.dw.com'); failing = true;
-    await choice('news', 'dw');
+    current.__expectedFailures.push('www.aljazeera.net'); failing = true;
+    await choice('news', 'aljazeera');
     await current.waitForFunction(() => !!ShoreQA.state().headlines.error);
     await scene('home'); card = await newsCard();
     check('A failed source says so instead of showing another source', card.on && card.items.length === 0 && card.error === 'تعذّر تحميل الأخبار.', card);

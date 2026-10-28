@@ -30,6 +30,8 @@ window.CleanFrameStrings = {
       'The TV could not open this screen.': 'تعذّر على التلفاز فتح هذه الشاشة.',
       'Try again, or press the remote’s Home button to return to CleanFrame.': 'حاول مجددًا، أو اضغط زر الرئيسية في جهاز التحكم للعودة إلى CleanFrame.',
       'The TV did not respond. Please try again.': 'لم يستجب التلفاز. يُرجى المحاولة مجددًا.',
+      'The TV does not list this HDMI input.': 'لا يُدرج التلفاز منفذ HDMI هذا.',
+      'Check the cable, or choose the input from the TV’s Source menu.': 'تحقّق من الكابل، أو اختر المنفذ من قائمة المصادر في التلفاز.',
       'This app has no launch target.': 'لا توجد وجهة تشغيل لهذا التطبيق.',
       'Could not read installed apps.': 'تعذّرت قراءة التطبيقات المثبتة.',
 
@@ -166,7 +168,8 @@ window.CleanFrameStrings = {
       'Loading the news…': 'جارٍ تحميل الأخبار…',
       'Couldn’t load the news.': 'تعذّر تحميل الأخبار.',
       'The news source did not respond.': 'لم يستجب مصدر الأخبار.',
-      'News is unavailable.': 'الأخبار غير متاحة.'
+      'News is unavailable.': 'الأخبار غير متاحة.',
+      'Browsers block this source. Open CleanFrame on the TV to read it.': 'يحجب المتصفح هذا المصدر. افتح CleanFrame على التلفاز لقراءته.'
     },
     names: {
       days: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],

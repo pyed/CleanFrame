@@ -15,7 +15,7 @@ The public app uses Manrope, Geist, Newsreader and IBM Plex Sans Arabic. A perso
 
 ## News headlines
 
-In Arabic, Home can show headline text from the public RSS feed of CNN Arabic, Sky News Arabia, Asharq Al-Awsat or DW Arabic. The feeds are read on the viewer's TV for personal display; no headline is bundled, stored or redistributed by this project. Each publisher retains its rights in its headlines and names.
+In Arabic, Home can show headline text from the public RSS feed of Sabq, Al Arabiya, Al Jazeera, Sky News Arabia or Asharq Al-Awsat. The feeds are read on the viewer's TV for personal display; no headline is bundled, stored or redistributed by this project. Each publisher retains its rights in its headlines and names.
 
 ## Icons and trademarks
 
@@ -23,7 +23,7 @@ In Arabic, Home can show headline text from the public RSS feed of CNN Arabic, S
 | --- | --- |
 | Simple Icons service marks | CC0; exact revisions and adaptations in `app/assets/icons/SOURCES.json` and `ADDITIONAL-SOURCES.json`. The CC0 text is retained beside the icons. |
 | Disney+, ABC and SBS marks | [Custom Brand Icons](https://github.com/elax46/custom-brand-icons), MIT. The retained licence is `app/assets/icons/CUSTOM-BRAND-ICONS-LICENSE.txt`. ABC and SBS sources were replaced during the public-source review. Exact revisions, source files and extraction/recolour notes are in `SOURCES.json`. |
-| Art, apps, settings and home outlines | Original CleanFrame drawings, covered by the project's MIT licence. |
+| Art, apps, settings, home and HDMI input outlines | Original CleanFrame drawings, covered by the project's MIT licence. |
 
 Brand marks identify services. Their owners retain trademark rights; this project claims no endorsement or affiliation. The older Australian TV icon archive's GPL text is retained for historical provenance only; no current icon uses that archive.
 
