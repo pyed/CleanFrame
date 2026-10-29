@@ -64,7 +64,7 @@ Each HDMI port has its own tile; HDMI 3 starts on Home as the PC. A tile is not 
 
 Settings → Inputs lists HDMI 1-4 with their names, and whether the TV reports each as connected (read when Home starts and each time it returns). It opens on the port the TV is showing. Each port takes one of eight names with a matching outline: its own port name, PC, Laptop, Game console, PlayStation, Xbox, Receiver or Media player. The choice is saved directly and named in the interface language; brand names keep their spelling.
 
-Back on Home reads the TV's current source (`tizen.tvwindow.getSource`). On an HDMI input it switches back to that input the same way, so Home → Back returns to the PC. Back from the Home controls still returns to the apps first. The owner of the Tizen 6.5 TV in [compatibility](compatibility.md) confirmed that OK on the tile switches the TV to HDMI 3.
+Back on Home reads the TV's current source (`tizen.tvwindow.getSource`). On an HDMI input it switches back to that input the same way, so Home → Back returns to the PC; the owner of the Tizen 6.5 TV in [compatibility](compatibility.md) confirmed this. Back from the Home controls still returns to the apps first. The owner of the Tizen 6.5 TV in [compatibility](compatibility.md) confirmed that OK on the tile switches the TV to HDMI 3.
 
 ## All apps
 
