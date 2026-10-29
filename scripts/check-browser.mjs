@@ -7,7 +7,7 @@ const KEY = 'cleanframe.home.v1';
 const PRIMARY = ['stremio', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'abciview', 'sbs', 'applemusic'];
 const IDS = ['IkWsFHtOY9.Stremio', 'org.tizen.netflix-app', 'MCmYXNxgcu.DisneyPlus', '9Ur5IzDKqV.TizenYouTube', 'com.samsung.tv.aria-video', 'org.tizen.primevideo', 'mWK87Xghap.ABCiview', 'OyE7OuxlUi.SBSOnDemand', 'org.tizen.apple.apple-music'];
 const NAMES = ['Stremio', 'Netflix', 'Disney+', 'YouTube', 'Apple TV', 'Prime Video', 'ABC iview', 'SBS On Demand', 'Apple Music'];
-const NEW_HOME = ['hdmi', 'youtube', 'plex', 'appletv'], PLEX = 'kIciSQlYEM.plex';
+const NEW_HOME = ['hdmi3', 'youtube', 'plex', 'appletv'], PLEX = 'kIciSQlYEM.plex';
 const EXTRA = 'AbCdEf1234.FamilyApp', SPOTIFY = 'rJeHak5zRg.Spotify';
 const UNSAFE_NAME = 'Family <img src=x onerror="window.__catalogXss=1"> & TV';
 const CATALOG = IDS.map((id, i) => ({ id, name: NAMES[i], show: true, iconPath: '' })).concat([
@@ -62,13 +62,13 @@ async function run(name, fn) {
 async function closePage() { if (current) { current.__closing = true; await current.close(); current = null; } }
 
 // Production still calls its unmodified device.js adapter.
-function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure, noFontAPI, storageFailure, currentAppId, initiallyHidden, pauseHiddenFrames, rejectDecode, inputs, viewerFailure }) {
+function installHarness({ seed, legacy, mock, catalog, minuteMs, newsTurnMs, catalogFailure, noFontAPI, storageFailure, currentAppId, initiallyHidden, pauseHiddenFrames, rejectDecode, inputs, viewerFailure }) {
   if (!sessionStorage.getItem('__cleanframe_seeded')) {
     if (seed !== undefined) localStorage.setItem('cleanframe.home.v1', typeof seed === 'string' ? seed : JSON.stringify(seed));
     if (legacy !== undefined) localStorage.setItem('cleanframe.shore.v1', typeof legacy === 'string' ? legacy : JSON.stringify(legacy));
     sessionStorage.setItem('__cleanframe_seeded', '1');
   }
-  window.ShoreQA = { minuteMs };
+  window.ShoreQA = { minuteMs, newsTurnMs };
   window.__failWrites = !!storageFailure;
   window.__storageAttempts = 0;
   const set = Storage.prototype.setItem;
@@ -121,7 +121,10 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
   // The TV's video sources, only when a section supplies them (public systeminfo and tvwindow APIs).
   if (!inputs) return;
   window.tizen.systeminfo = { getPropertyValue(name, ok) { window.__tv.sourceQueries++; setTimeout(() => ok(JSON.parse(JSON.stringify(inputs))), 0); } };
-  window.tizen.tvwindow = { setSource(source, ok) { window.__tv.calls.push({ method: 'setSource', source: { type: source.type, number: source.number } }); setTimeout(ok, 0); } };
+  window.tizen.tvwindow = {
+    getSource() { return inputs.current || { type: 'TV', number: 1 }; },
+    setSource(source, ok) { window.__tv.calls.push({ method: 'setSource', source: { type: source.type, number: source.number } }); setTimeout(ok, 0); }
+  };
 }
 async function page(options = {}, setup) {
   current = await preview.browser.newPage({ viewport: { width: 1920, height: 1080 }, ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}) });
@@ -230,10 +233,10 @@ const wallpaperListGeometry = () => current.evaluate(() => {
 async function editor() { await scene('settings'); await act('settings.editor'); await current.waitForFunction(() => document.querySelector('[data-action^="editor.move."]')); await current.waitForFunction(() => !ShoreQA.state().catalog.loading); }
 async function remove(id) { await act('editor.move.' + id); await nav('back', 'right', 'ok'); }
 async function library() { await scene('home'); await act('util.apps'); await current.waitForFunction(() => !ShoreQA.state().catalog.loading); }
-/* The last two Settings groups sit below the six-row window, so reach them by remote. */
+/* The last three Settings groups sit below the six-row window, so reach them by remote. */
 async function settingsGroup(name) {
-  const order = { widgets: 6, language: 7 }[name];
-  await scene('settings'); await nav(...Array(7).fill('up'), ...Array(order).fill('down'), 'ok');
+  const order = { inputs: 6, widgets: 7, language: 8 }[name];
+  await scene('settings'); await nav(...Array(9).fill('up'), ...Array(order).fill('down'), 'ok');
   await current.waitForFunction(expected => ShoreQA.state().settingsGroup === expected, name);
 }
 async function language(value) { await settingsGroup('language'); await choice('lang', value); await ready(); }
@@ -264,7 +267,8 @@ const homeInfo = () => current.evaluate(() => ({
 const newsCard = () => current.evaluate(() => {
   const card = document.getElementById('news');
   return { on: card.classList.contains('is-on') && card.getClientRects().length > 0, source: card.querySelector('.news-source')?.textContent || null,
-    items: [...card.querySelectorAll('.news-item')].map(e => e.textContent), error: card.querySelector('.news-error')?.textContent || null, images: card.querySelectorAll('img:not(.ph-field-img)').length };
+    items: [...card.querySelectorAll('.news-page:not(.is-leaving) .news-item')].map(e => e.textContent), error: card.querySelector('.news-error')?.textContent || null, images: card.querySelectorAll('img:not(.ph-field-img)').length,
+    dots: card.querySelectorAll('.news-dot').length, dot: [...card.querySelectorAll('.news-dot')].findIndex(e => e.classList.contains('is-on')), pages: card.querySelectorAll('.news-page').length };
 });
 async function noLiveFilters() {
   return current.evaluate(() => [...document.querySelectorAll('#stage, #stage *')].filter(e => e.getClientRects().length).map(e => {
@@ -447,7 +451,7 @@ try {
         const scale = document.getElementById('stage').getBoundingClientRect().width / 1920;
         return elements.map(e => (e.querySelector('.ico').getBoundingClientRect().left - e.querySelector('.settings-group-copy').getBoundingClientRect().right) / scale);
       });
-      check('Settings group arrows stay separate from their copy at ' + width, groups.length === 8 && groups.every(gap => gap >= 31.5), groups);
+      check('Settings group arrows stay separate from their copy at ' + width, groups.length === 9 && groups.every(gap => gap >= 31.5), groups);
       await wallpaper();
       const caption = await current.locator('.wallpaper-preview-name').evaluate(e => {
         const scale = document.getElementById('stage').getBoundingClientRect().width / 1920;
@@ -1111,24 +1115,33 @@ try {
     hold = false;
   });
   await run('HDMI input and the version 3 Home', async () => {
-    const VIDEO = { connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 3 }], disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 2 }] };
+    const VIDEO = { connected: [{ type: 'TV', number: 1 }, { type: 'HDMI', number: 3 }], disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 2 }], current: { type: 'HDMI', number: 3 } };
     const calls = () => current.evaluate(() => __tv.calls);
     await page({ seed: undefined, inputs: VIDEO });
     let s = await state();
-    check('A new Home holds HDMI 3, YouTube, Plex and Apple TV, starting on HDMI 3', same(s.dock, NEW_HOME) && s.selected === 'hdmi' && (await call('where')).focus === 'HDMI 3', s);
+    check('A new Home holds the PC on HDMI 3, YouTube, Plex and Apple TV, starting on the PC', same(s.dock, NEW_HOME) && s.selected === 'hdmi3' && s.input3 === 'pc' && (await call('where')).focus === 'PC', s);
     check('The input and Plex use their own marks', await current.evaluate(() => ['input', 'plex'].every(id => document.querySelector('.tile [data-mark="' + id + '"]:not(.is-bad)'))));
     await nav('ok'); await current.waitForFunction(() => __tv.calls.length >= 2);
     check('OK puts the TV on HDMI 3, then opens the TV viewer', same(await calls(), [{ method: 'setSource', source: { type: 'HDMI', number: 3 } }, { method: 'launch', id: 'org.tizen.tv-viewer' }]), await calls());
-    check('Switching stays on Home without a message', (await call('where')).view === 'home' && (await stored()).lastApp === 'hdmi');
+    check('Switching stays on Home without a message', (await call('where')).view === 'home' && (await stored()).lastApp === 'hdmi3');
+    await current.evaluate(() => { __tv.calls = []; });
+    await nav('back'); await current.waitForFunction(() => __tv.calls.length >= 2);
+    check('Back on Home returns to the input on screen', same(await calls(), [{ method: 'setSource', source: { type: 'HDMI', number: 3 } }, { method: 'launch', id: 'org.tizen.tv-viewer' }]) && (await call('where')).view === 'home', await calls());
+    await nav('up'); await current.evaluate(() => { __tv.calls = []; }); await nav('back');
+    check('Back from the Home controls still returns to the apps first', (await call('where')).zone === 'apps' && !(await calls()).length);
+    await closePage();
+    await page({ seed: undefined, inputs: { ...VIDEO, current: { type: 'TV', number: 1 } } });
+    await nav('back');
+    check('Back on another source still offers Samsung Home', (await call('where')).view === 'message' && !(await current.evaluate(() => __tv.calls.length)));
     await closePage();
     await page({ seed: undefined, inputs: VIDEO, viewerFailure: true });
     await nav('ok'); await current.waitForFunction(() => __tv.calls.some(c => c.method === 'hide'));
     check('Without the viewer, CleanFrame steps aside to uncover the input', same((await calls()).map(c => c.method), ['setSource', 'launch', 'hide']) && (await call('where')).view === 'home', await calls());
     await closePage();
-    await page({ seed: undefined, inputs: { connected: [{ type: 'HDMI', number: 2 }], disconnected: [{ type: 'HDMI', number: 3 }] } });
-    await current.waitForFunction(() => ShoreQA.where().focus === 'HDMI 2');
+    await page({ seed: { ...baseline({ dock: ['hdmi3', 'hdmi1'], lastApp: 'hdmi1' }), version: 3, input1: 'playstation' }, inputs: VIDEO });
+    check('Each port has its own named tile', (await call('where')).focus === 'PlayStation' && await current.evaluate(() => !!document.querySelector('.tile [data-mark="gamepad"]:not(.is-bad)')));
     await nav('ok'); await current.waitForFunction(() => __tv.calls.length >= 2);
-    check('With HDMI 3 asleep, the tile follows the connected input', (await calls())[0].source.number === 2, await calls());
+    check('A tile opens its own port, even on standby', (await calls())[0].source.number === 1, await calls());
     await closePage();
     await page({ seed: undefined, inputs: { connected: [], disconnected: [{ type: 'HDMI', number: 1 }] } });
     await nav('ok'); await current.waitForFunction(() => ShoreQA.where().view === 'message');
@@ -1140,7 +1153,11 @@ try {
     await closePage();
     await page({ seed: { ...baseline(), version: 2 } });
     s = await state();
-    check('A version 2 Home of defaults takes the new set and starts on HDMI 3', same(s.dock, NEW_HOME) && s.selected === 'hdmi' && (await stored()).version === 3, s);
+    check('A version 2 Home of defaults takes the new set and starts on HDMI 3', same(s.dock, NEW_HOME) && s.selected === 'hdmi3' && (await stored()).version === 3, s);
+    await closePage();
+    await page({ seed: { ...baseline({ dock: ['hdmi', 'youtube', 'plex', 'appletv'], lastApp: 'hdmi' }), version: 3 } });
+    s = await state();
+    check('The earlier single HDMI tile becomes the HDMI 3 tile', same(s.dock, NEW_HOME) && s.selected === 'hdmi3' && s.lastApp === 'hdmi3', s);
     await closePage();
     await page({ seed: { ...baseline({ dock: ['youtube', PLEX], lastApp: PLEX }), version: 2, appRecords: [{ id: PLEX, appId: PLEX, name: 'Plex - Free Movies & TV', brand: '', icon: '' }] } });
     s = await state();
@@ -1148,16 +1165,62 @@ try {
     await closePage();
     await page({ seed: { ...baseline({ dock: ['netflix', EXTRA], lastApp: EXTRA }), version: 2, appRecords: [{ id: EXTRA, appId: EXTRA, name: 'Family', brand: '', icon: '' }] } });
     s = await state();
-    check('A customised version 2 Home keeps its apps and gains HDMI 3 first', same(s.dock, ['hdmi', 'netflix', EXTRA]) && s.selected === 'hdmi', s);
+    check('A customised version 2 Home keeps its apps and gains HDMI 3 first', same(s.dock, ['hdmi3', 'netflix', EXTRA]) && s.selected === 'hdmi3', s);
     await closePage();
     await page({ seed: { ...baseline({ dock: ['youtube'], lastApp: 'youtube' }), version: 3 }, catalog: CATALOG.concat([{ id: PLEX, name: 'Plex - Free Movies ＆ TV', show: true, iconPath: '' }]) });
     check('A version 3 Home is left as saved', same((await state()).dock, ['youtube']));
     await editor();
     const adds = (await call('actions')).filter(a => a.startsWith('editor.add.'));
-    check('A removed HDMI tile leads the addable list', adds[0] === 'editor.add.hdmi' && adds.includes('editor.add.plex'), adds);
-    await act('editor.add.hdmi');
-    check('The HDMI tile can be added back', same((await stored()).dock, ['youtube', 'hdmi']));
+    check('HDMI inputs lead the addable list', same(adds.slice(0, 4), ['editor.add.hdmi1', 'editor.add.hdmi2', 'editor.add.hdmi3', 'editor.add.hdmi4']), adds);
+    await act('editor.add.hdmi3');
+    check('An HDMI tile can be added back', same((await stored()).dock, ['youtube', 'hdmi3']));
     check('Installed Plex is recognised by its brand', (await state()).catalog.ids.includes('plex') && !(await state()).catalog.ids.includes(PLEX));
+  });
+  await run('Inputs are named in Settings', async () => {
+    const VIDEO = { connected: [{ type: 'HDMI', number: 3 }], disconnected: [{ type: 'HDMI', number: 1 }, { type: 'HDMI', number: 2 }, { type: 'HDMI', number: 4 }], current: { type: 'HDMI', number: 3 } };
+    await page({ seed: undefined, inputs: VIDEO });
+    await settingsGroup('inputs');
+    const rows = await current.evaluate(() => [...document.querySelectorAll('#stage [data-action^="inputs."]')].map(e => ({ action: e.getAttribute('data-action'), name: e.querySelector('.setting-name').textContent, detail: e.querySelector('.setting-description').textContent, focus: e.classList.contains('is-focus') })));
+    check('Inputs lists four ports with names and what the TV reports', same(rows.map(r => r.action), ['inputs.1', 'inputs.2', 'inputs.3', 'inputs.4']) && rows[2].name === 'PC' && rows[2].detail === 'HDMI 3 · Connected' && rows[0].name === 'HDMI 1' && rows[0].detail === 'Not connected', rows);
+    check('Inputs opens on the port the TV is showing', rows[2].focus, rows);
+    await act('inputs.3');
+    const names = await radios();
+    check('Each port offers eight names with outlines', names.length === 8 && names.find(r => r.action === 'choice.input3.pc').checked === 'true' && await current.evaluate(() => document.querySelectorAll('#stage .setting-mark .mark').length === 8), names);
+    await choice('input3', 'playstation');
+    check('A chosen name is saved directly', (await stored()).input3 === 'playstation' && (await state()).writes >= 1);
+    await scene('home');
+    check('The tile shows the new name and outline', (await call('where')).focus === 'PlayStation' && await current.evaluate(() => !!document.querySelector('.tile [data-mark="gamepad"]:not(.is-bad)')));
+    await current.reload(); await ready();
+    check('The name survives reload', (await call('where')).focus === 'PlayStation');
+    await language('ar'); await scene('home');
+    await settingsGroup('inputs'); await act('inputs.3'); await choice('input3', 'pc'); await scene('home');
+    check('Names follow the interface language', (await call('where')).focus === 'الكمبيوتر');
+  });
+  await run('Headlines turn three at a time', async () => {
+    const requests = [];
+    await page({ seed: baseline({ look: { lang: 'ar' } }), newsTurnMs: 1500 }, p => routeFeeds(p, requests));
+    await current.waitForFunction(() => ShoreQA.state().headlines.titles.length === 4);
+    let card = await newsCard();
+    check('The first page shows the newest three with page dots', same(card.items, NEWS_TITLES.slice(0, 3)) && card.dots === 2 && card.dot === 0, card);
+    await current.waitForFunction(() => ShoreQA.state().headlines.page === 1, null, { timeout: 5000 });
+    await current.waitForTimeout(900);
+    card = await newsCard();
+    check('The next page follows in the same place', same(card.items, NEWS_TITLES.slice(3)) && card.dot === 1 && card.pages === 1, card);
+    // A turn waits while the remote moves.
+    const before = (await state()).headlines.page;
+    for (let i = 0; i < 12; i++) { await nav(i % 2 ? 'left' : 'right'); await current.waitForTimeout(200); }
+    check('No page turns while the remote moves', (await state()).headlines.page === before);
+    await current.waitForFunction(() => ShoreQA.state().headlines.page === 0, null, { timeout: 5000 });
+    check('Pages wrap back to the newest', same((await newsCard()).items, NEWS_TITLES.slice(0, 3)));
+    check('Turning pages makes no new requests', requests.length === 1, requests);
+    check('Turns stay off the main layout: only opacity and transform change', await current.evaluate(() => {
+      const s = getComputedStyle(document.querySelector('#news .news-item'));
+      return s.transitionProperty.split(',').map(p => p.trim()).every(p => p === 'opacity' || p === 'transform');
+    }));
+    await current.evaluate(() => window.__setHidden(true));
+    check('Turns stop while the launcher is hidden', !(await state()).headlines.turning);
+    await current.evaluate(() => window.__setHidden(false));
+    check('Turns resume when Home returns', (await state()).headlines.turning);
   });
   await run('Language and widget preferences migrate safely', async () => {
     const requests = [];

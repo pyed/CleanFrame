@@ -24,12 +24,23 @@
     { id: 'sbs', name: 'SBS On Demand', mark: true, appId: 'OyE7OuxlUi.SBSOnDemand' },
     { id: 'applemusic', name: 'Apple Music', mark: true, appId: 'org.tizen.apple.apple-music' },
     { id: 'plex', name: 'Plex', mark: true, appId: 'kIciSQlYEM.plex' },
-    /* Not an app: switches the TV to an HDMI input. It follows the input the TV reports as connected, preferring HDMI 3. */
-    { id: 'hdmi', name: 'HDMI 3', mark: true, brand: 'input', input: 3 }
+    /* Not apps: each switches the TV to its HDMI port. Names and outlines come from Settings → Inputs. */
+    { id: 'hdmi1', name: 'HDMI 1', mark: true, brand: 'input', input: 1 },
+    { id: 'hdmi2', name: 'HDMI 2', mark: true, brand: 'input', input: 2 },
+    { id: 'hdmi3', name: 'HDMI 3', mark: true, brand: 'input', input: 3 },
+    { id: 'hdmi4', name: 'HDMI 4', mark: true, brand: 'input', input: 4 }
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
-  var INPUT_PORT = 3, INPUTS = ['hdmi'], DEFAULT_HOME = ['hdmi', 'youtube', 'plex', 'appletv'];
+  var INPUTS = ['hdmi1', 'hdmi2', 'hdmi3', 'hdmi4'], DEFAULT_HOME = ['hdmi3', 'youtube', 'plex', 'appletv'];
   var OLD_HOME = ['stremio', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'abciview', 'sbs', 'applemusic'];
+  /* Names an HDMI tile can take, each with its outline; 'hdmi' shows the port itself. HDMI 3 starts as the PC. */
+  var INPUT_NAMES = [
+    { id: 'hdmi', name: 'HDMI {n}', mark: 'input' }, { id: 'pc', name: 'PC', mark: 'input' },
+    { id: 'laptop', name: 'Laptop', mark: 'laptop' }, { id: 'console', name: 'Game console', mark: 'gamepad' },
+    { id: 'playstation', name: 'PlayStation', mark: 'gamepad' }, { id: 'xbox', name: 'Xbox', mark: 'gamepad' },
+    { id: 'receiver', name: 'Receiver', mark: 'receiver' }, { id: 'media', name: 'Media player', mark: 'receiver' }
+  ];
+  var INPUT_DEFAULTS = { input1: 'hdmi', input2: 'hdmi', input3: 'pc', input4: 'hdmi' };
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Misty coast', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
   var ADAPTIVE_INK = window.CleanFrameAdaptiveInk || {};
   WALLS.forEach(function (w) { w.ut = w.ut || { tr: 'light', br: 'light' }; w.frostVeil = w.frostVeil || .12; });
@@ -49,7 +60,7 @@
     { id: '60', name: 'Every hour', min: 60 }
   ];
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
-  var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
+  var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000, newsTurnMs: window.ShoreQA && window.ShoreQA.newsTurnMs || 30000 };
   var FONTS = {
     manrope: { name: 'Manrope', family: 'Manrope', display: 600, ui: 500, clock: 500 },
     montreal: { name: 'Neue Montreal', family: 'Study Montreal', display: 300, ui: 400, clock: 300 },
@@ -68,6 +79,7 @@
   var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', show: 'Show', hide: 'Hide', off: 'Off' };
   /* Saved choices without appearance assets: written directly, like rotation. */
   var PREF_VALUES = { date: ['show', 'hide'], prayer: ['show', 'hide'], city: CITIES.map(function (c) { return c.id; }), news: ['off'].concat(SOURCES.map(function (s) { return s.id; })) };
+  Object.keys(INPUT_DEFAULTS).forEach(function (axis) { PREF_VALUES[axis] = INPUT_NAMES.map(function (n) { return n.id; }); });
   function fontList(script) {
     return Object.keys(FONTS).filter(function (id) { return (FONTS[id].script || 'latin') === script && (id === 'manrope' || id === 'plexar' || PRIVATE_FONTS.indexOf(id) >= 0 && !unavailableFonts[id]); });
   }
@@ -391,17 +403,22 @@
     }
     return null;
   }
-  /* An installed app saved by its ID before CleanFrame had an entry for it (Plex) moves to that entry. */
-  function known(id) { for (var i = 0; i < PRIMARY_APPS.length; i++) if (PRIMARY_APPS[i].appId === id) return PRIMARY_APPS[i].id; return id; }
+  /* An installed app saved by its ID before CleanFrame had an entry for it (Plex) moves to that entry; so does
+     the first single HDMI tile, which was HDMI 3. */
+  function known(id) {
+    if (id === 'hdmi') return 'hdmi3';
+    for (var i = 0; i < PRIMARY_APPS.length; i++) if (PRIMARY_APPS[i].appId === id) return PRIMARY_APPS[i].id;
+    return id;
+  }
   /* Version 3 replaces the nine-service default with HDMI 3, YouTube, Plex and Apple TV. A Home that held only
      defaults takes the new set; one with other apps keeps them and gains the HDMI tile first. */
   function homeV3(h) {
     if (h.every(function (id) { return OLD_HOME.indexOf(id) >= 0 || DEFAULT_HOME.indexOf(id) >= 0; })) return DEFAULT_HOME.slice();
-    return h.indexOf('hdmi') < 0 && h.length < CAP ? ['hdmi'].concat(h) : h;
+    return h.indexOf('hdmi3') < 0 && h.length < CAP ? ['hdmi3'].concat(h) : h;
   }
   function clean(saved) {
     var s = saved && typeof saved === 'object' ? saved : {}, modern = s.look && typeof s.look === 'object' ? s.look : s;
-    var legacyList = s.theme === 'list', h = [], recent = [], records = Array.isArray(s.appRecords) ? s.appRecords : [], before, renewed = false;
+    var legacyList = s.theme === 'list', h = [], recent = [], records = Array.isArray(s.appRecords) ? s.appRecords : [], before, renewed = false, last;
     records.slice(0, 256).forEach(function (a) {
       if (!a || !safeId(a.id) || !safeId(a.appId) || typeof a.name !== 'string' || !a.name.trim() || app(a.id) || known(a.id) !== a.id) return;
       APPS.push({ id: a.id, appId: a.appId, name: a.name.slice(0, 160), brand: ['hbomax', 'spotify', 'tubi'].indexOf(a.brand) >= 0 ? a.brand : '', mark: ['hbomax', 'spotify', 'tubi'].indexOf(a.brand) >= 0, icon: safeIcon(a.icon) });
@@ -416,18 +433,21 @@
     if (!h.length) h = DEFAULT_HOME.slice();
     else if (s.version === 2) { before = h; h = homeV3(h); renewed = !same(before, h); }
     (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { id = safeId(id) ? known(id) : ''; if (id && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
+    last = safeId(s.lastApp) ? known(s.lastApp) : '';
     return {
       bg: pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : 'dock'),
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       // A renewed Home starts on its new first tile, the HDMI input.
-      home: h, recent: recent, lastApp: !renewed && h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
+      home: h, recent: recent, lastApp: !renewed && h.indexOf(last) >= 0 ? last : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'),
       // Added after 0.6.1; older preferences gain English with the date and Riyadh prayer times shown.
       lang: pick(modern.lang, LOOK_VALUES.lang, 'en'), arfont: pick(modern.arfont, LOOK_VALUES.arfont, 'plexar'),
       date: pick(s.date, PREF_VALUES.date, 'show'), prayer: pick(s.prayer, PREF_VALUES.prayer, 'show'),
-      city: pick(s.city, PREF_VALUES.city, PREF_VALUES.city[0] || 'riyadh'), news: pick(s.news, PREF_VALUES.news, PREF_VALUES.news[1] || 'off')
+      city: pick(s.city, PREF_VALUES.city, PREF_VALUES.city[0] || 'riyadh'), news: pick(s.news, PREF_VALUES.news, PREF_VALUES.news[1] || 'off'),
+      input1: pick(s.input1, PREF_VALUES.input1, INPUT_DEFAULTS.input1), input2: pick(s.input2, PREF_VALUES.input2, INPUT_DEFAULTS.input2),
+      input3: pick(s.input3, PREF_VALUES.input3, INPUT_DEFAULTS.input3), input4: pick(s.input4, PREF_VALUES.input4, INPUT_DEFAULTS.input4)
     };
   }
   function serialise(c) {
@@ -455,6 +475,7 @@
   function next(home, recent) {
     var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode;
     c.date = S.c.date; c.prayer = S.c.prayer; c.city = S.c.city; c.news = S.c.news;
+    c.input1 = S.c.input1; c.input2 = S.c.input2; c.input3 = S.c.input3; c.input4 = S.c.input4;
     return c;
   }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
@@ -552,18 +573,35 @@
     S.press = id; S.lastLaunch = a.name;
     perform(a.name, function (done) { if (a.input) FrameDevice.input(a.input, done); else FrameDevice.launchApp(a.appId, done); });
   }
-  /* The HDMI tile names the input it will open: HDMI 3 when the TV lists it as connected (or lists nothing
-     connected), otherwise the input that is. Checked when Home starts or returns; the query is asynchronous. */
-  function syncInput() {
+  /* ---------- HDMI inputs ---------- */
+  function inputPreset(port) { var id = S.c['input' + port]; for (var i = 0; i < INPUT_NAMES.length; i++) if (INPUT_NAMES[i].id === id) return INPUT_NAMES[i]; return INPUT_NAMES[0]; }
+  function presetName(preset, port) { return preset.id === 'hdmi' ? 'HDMI ' + port : tx(preset.name); }
+  function inputName(port) { return presetName(inputPreset(port), port); }
+  /* Tiles take their names from the saved choices and the interface language; cached tiles redraw on a change. */
+  function refreshInputs() {
+    var changed = false;
+    INPUTS.forEach(function (id) {
+      var a = app(id), preset = inputPreset(a.input), name = presetName(preset, a.input);
+      if (a.name !== name || a.brand !== preset.mark) { a.name = name; a.brand = preset.mark; changed = true; }
+    });
+    if (changed) catalog.revision++;
+  }
+  /* Which ports the TV lists as connected, shown in Settings → Inputs. Read when Home starts or returns. */
+  var sources = { connected: null };
+  function syncSources() {
     if (!FrameDevice.inputs) return;
     FrameDevice.inputs(function (err, ports) {
-      var a = app('hdmi'), port;
-      if (err || !a) return;
-      port = ports.connected.indexOf(INPUT_PORT) >= 0 || !ports.connected.length ? INPUT_PORT : ports.connected[0];
-      if (port === a.input) return;
-      a.input = port; a.name = 'HDMI ' + port; catalog.revision++;
-      render();
+      if (err) return;
+      sources.connected = ports.connected;
+      if (top().id === 'appearance' && top().group === 'inputs') render();
     });
+  }
+  /* Back on Home returns to the HDMI input the TV is showing underneath, such as the PC, in one press.
+     On another source, or when the TV cannot say, it offers Samsung Home as before. */
+  function backToInput() {
+    var port = FrameDevice.currentInput ? FrameDevice.currentInput() : 0;
+    if (!port) { openMessage('leave'); return; }
+    perform(inputName(port), function (done) { FrameDevice.input(port, done); });
   }
   function refreshCatalog() {
     var request, oldFocus;
@@ -606,10 +644,12 @@
   }
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
-  function groupAxis(group) { return { background: 'bg', layout: 'layout', typography: fontAxis(), focus: 'focus', rotation: 'mode', language: 'lang', widgets: 'date', city: 'city', news: 'news' }[group]; }
+  function groupAxis(group) { return inputAxis(group) ? group : { background: 'bg', layout: 'layout', typography: fontAxis(), focus: 'focus', rotation: 'mode', language: 'lang', widgets: 'date', city: 'city', news: 'news' }[group]; }
   function openAppearance(group) {
     var axis = groupAxis(group);
-    var action = S.detailFocus[group] || (axis === 'mode' ? 'rotation.' + S.c.mode : axis ? 'choice.' + axis + '.' + S.c[axis] : 'samsung.home');
+    // Inputs opens on the port the TV is showing, which is usually the one to name.
+    var action = S.detailFocus[group] || (axis === 'mode' ? 'rotation.' + S.c.mode : axis ? 'choice.' + axis + '.' + S.c[axis]
+      : group === 'inputs' ? 'inputs.' + (FrameDevice.currentInput && FrameDevice.currentInput() || 1) : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
   function openMessage(key) { push({ id: 'message', msg: key, f: { b: 0 } }); }
@@ -649,7 +689,7 @@
       }
       f.zone = 'apps';
       if (k === x.out) { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
-      else if (k === 'back') openMessage('leave');
+      else if (k === 'back') backToInput();
       else if (!h.length) { if (k === 'ok') addAppsRoute(); }
       else if (k === x.prev && i > 0) setSel(h[i - 1]);
       else if (k === x.next && i < h.length - 1) setSel(h[i + 1]);
@@ -678,7 +718,7 @@
     if (k === 'up' && i > 0) setSel(h[i - 1]);
     else if (k === 'right') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
     else if (k === 'down' && i < h.length - 1) setSel(h[i + 1]);
-    else if (k === 'back') openMessage('leave');
+    else if (k === 'back') backToInput();
     else if (k === 'ok') { if (h.length) launch(S.sel); else addAppsRoute(); }
   }
 
@@ -919,7 +959,7 @@
   /* ---------- Settings, Layout and messages ---------- */
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
-    var n = S.c.home.length, shown = [];
+    var n = S.c.home.length, shown = [], inputs = S.c.home.filter(function (id) { return INPUTS.indexOf(id) >= 0; }).map(function (id) { return app(id).name; });
     if (S.c.date === 'show') shown.push(tx('Date'));
     if (S.c.prayer === 'show') shown.push(tx('Prayer times'));
     if (isAr() && S.c.news !== 'off') shown.push(tx('News'));
@@ -929,6 +969,7 @@
       { id: 'focus', label: tx('Focus'), value: tx(VALUE_NAMES[S.c.focus]) + (materialApplies() ? sep() + tx(VALUE_NAMES[S.c.material]) : '') },
       { id: 'editor', label: tx('Apps on Home'), value: appCount(n) },
       { id: 'samsung', label: tx('Samsung'), value: tx('Home and TV settings') },
+      { id: 'inputs', label: tx('Inputs'), value: inputs.length ? inputs.join(sep()) : tx('None on Home') },
       { id: 'widgets', label: tx('Widgets'), value: shown.length ? shown.join(sep()) : tx('None') },
       // Both scripts in English, so Arabic stays findable by someone who does not read English.
       { id: 'language', label: isAr() ? tx('Language') : 'Language · اللغة', value: S.c.lang === 'ar' ? 'العربية' : 'English' }];
@@ -951,20 +992,28 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung', widgets: 'Widgets', language: 'Language', city: 'Prayer city', news: 'News source' };
+  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung', widgets: 'Widgets', language: 'Language', city: 'Prayer city', news: 'News source', inputs: 'Inputs', input1: 'HDMI 1', input2: 'HDMI 2', input3: 'HDMI 3', input4: 'HDMI 4' };
+  function inputAxis(axis) { return /^input[1-4]$/.test(axis); }
+  function namePreset(id) { for (var i = 0; i < INPUT_NAMES.length; i++) if (INPUT_NAMES[i].id === id) return INPUT_NAMES[i]; return INPUT_NAMES[0]; }
   function valueLabel(axis, value) {
     if (axis === 'font' || axis === 'arfont') return fontName(value);
     if (axis === 'mode') return tx(MODES.filter(function (m) { return m.id === value; })[0].name);
     if (axis === 'lang') return value === 'ar' ? 'العربية' : 'English';
     if (axis === 'city') return cityName(value);
     if (axis === 'news') return newsName(value);
+    if (inputAxis(axis)) return presetName(namePreset(value), +axis.charAt(5));
     return tx(value === 'both' ? 'Both' : VALUE_NAMES[value]);
   }
   function choice(axis, value, disabled) {
-    return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled, label: valueLabel(axis, value) };
+    return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled, label: valueLabel(axis, value), mark: inputAxis(axis) ? namePreset(value).mark : null };
+  }
+  /* Settings → Inputs: each port's name and outline, its port number once named, and what the TV reports. */
+  function inputDetail(port) {
+    var named = inputPreset(port).id !== 'hdmi', status = sources.connected ? tx(sources.connected.indexOf(port) >= 0 ? 'Connected' : 'Not connected') : '';
+    return (named ? 'HDMI ' + port : '') + (named && status ? ' · ' : '') + status;
   }
   function detailSections(t) {
-    var flat = S.c.bg !== 'photo', inactive = !materialApplies(), cities = [], i;
+    var flat = S.c.bg !== 'photo', inactive = !materialApplies(), pairs = [], i;
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     if (t.group === 'background') return [
       { id: 'bg', title: tx('Background type'), items: options('bg', ['photo', 'light', 'dark']) },
@@ -995,17 +1044,26 @@
     ];
     if (t.group === 'city') {
       // Two cities per row keep all twelve on one screen with the usual row navigation.
-      for (i = 0; i < PREF_VALUES.city.length; i += 2) cities.push({ id: 'city-' + i / 2, title: '', horizontal: true, items: options('city', PREF_VALUES.city.slice(i, i + 2)) });
-      cities[cities.length - 1].reason = tx('Times follow the official method for each city.');
-      return cities;
+      for (i = 0; i < PREF_VALUES.city.length; i += 2) pairs.push({ id: 'city-' + i / 2, title: '', horizontal: true, items: options('city', PREF_VALUES.city.slice(i, i + 2)) });
+      pairs[pairs.length - 1].reason = tx('Times follow the official method for each city.');
+      return pairs;
     }
     if (t.group === 'news') return [{ id: 'news', title: '', items: options('news', PREF_VALUES.news), reason: tx('Headlines refresh every 15 minutes while Home is visible.') }];
+    if (t.group === 'inputs') return [{ id: 'inputs', title: '', items: [1, 2, 3, 4].map(function (port) {
+      return { action: 'inputs.' + port, label: inputName(port), description: inputDetail(port), mark: inputPreset(port).mark };
+    }), reason: tx('Add an input to Home from Apps on Home. Back on Home returns to the input on screen.') }];
+    if (inputAxis(t.group)) {
+      // Two names per row keep all eight on one screen, as the cities do.
+      for (i = 0; i < INPUT_NAMES.length; i += 2) pairs.push({ id: 'names-' + i / 2, title: '', horizontal: true, items: options(t.group, PREF_VALUES[t.group].slice(i, i + 2)) });
+      pairs[pairs.length - 1].reason = tx('The name and outline appear on the HDMI {n} tile.', { n: t.group.charAt(5) });
+      return pairs;
+    }
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: tx('Samsung Home'), description: tx('Open Samsung’s Home screen') },
       { action: 'samsung.settings', label: tx('TV settings'), description: tx('Picture, sound and network settings') }
     ] }];
   }
-  function parentGroup(t) { return t.group === 'rotation' ? 'Background' : t.group === 'city' || t.group === 'news' ? 'Widgets' : 'Settings'; }
+  function parentGroup(t) { return t.group === 'rotation' ? 'Background' : t.group === 'city' || t.group === 'news' ? 'Widgets' : inputAxis(t.group) ? 'Inputs' : 'Settings'; }
   function detailRows(t) {
     var rows = [[{ action: 'settings.back', label: tx(parentGroup(t)) }]];
     detailSections(t).forEach(function (section) {
@@ -1061,6 +1119,7 @@
     else if (item.action === 'background.rotation') openAppearance('rotation');
     else if (item.action === 'widgets.city') openAppearance('city');
     else if (item.action === 'widgets.news') openAppearance('news');
+    else if (/^inputs\.[1-4]$/.test(item.action)) openAppearance('input' + item.action.slice(7));
     else if (item.action === 'samsung.home') perform(tx('Samsung Home'), FrameDevice.home);
     else if (item.action === 'samsung.settings') perform(tx('TV settings'), FrameDevice.settings);
   }
@@ -1070,7 +1129,7 @@
       var axis = groupAxis(t.group);
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
-        if (item.axis === axis && item.value === S.c[axis]) applied = item;
+        if (axis && item.axis === axis && item.value === S.c[axis]) applied = item;
       }); });
       if (!exists) detailFocus(t, applied || (rows[1] || rows[0])[0], 0);
       if (t.f.column === undefined) t.f.column = detailLocation(t).column;
@@ -1134,7 +1193,7 @@
   var utPlates = [$('utLens'), $('utLensAlt')], utFields = [$('utField'), $('utFieldAlt')], utPlateIndex = 0, utPlateKey = null;
   var photoMode = null, photoTransitionToken = 0;
   var sheetEl = $('sheet'), sheetView = $('sheetView');
-  var newsEl = $('news'), newsField = $('newsField'), newsBody = $('newsBody');
+  var newsEl = $('news'), newsField = $('newsField'), newsHead = $('newsHead'), newsPages = $('newsPages');
   var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt'), news: $('newsFieldImg') };
   var sheetKey = '', slotEls = {}, dockEdgeFrame = 0, dockEdgeUntil = 0, dockAnchorCenter = 960;
   var appliedPalette = null, appliedPhoto = null, appliedFont = null, appliedFontMetrics = null;
@@ -1168,6 +1227,7 @@
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
     if (booting && (S.shown || S.lookError)) booting = false;
+    refreshInputs();
     stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (isAr() ? ' lang-ar rtl' : '') + (ALMANAC && (S.c.date === 'show' || S.c.prayer === 'show') ? ' has-info' : '') + (booting ? ' is-booting' : '');
     // Arabic mirrors Home with its photo (see style.css), so each offline-measured region keeps its text.
     if (stage.getAttribute('dir') !== (isAr() ? 'rtl' : 'ltr')) { stage.setAttribute('dir', isAr() ? 'rtl' : 'ltr'); document.documentElement.lang = isAr() ? 'ar' : 'en-AU'; }
@@ -1538,35 +1598,80 @@
 
   /* ---------- Headlines (Arabic only) ---------- */
   /* Card origins in Home's own coordinates; the Arabic mirror moves them to screen left. */
-  var NEWS_BOX = { dock: { x: 1168, y: 208, width: 640 }, list: { x: 1208, y: 360, width: 600 } }, NEWS_SHOWN = 3, NEWS_QUIET = 700;
-  var news = { source: null, items: [], loading: false, error: null, fetched: 0, due: 0, request: 0, timer: 0, key: '', arrived: null, paint: 0 };
+  var NEWS_BOX = { dock: { x: 1168, y: 208, width: 640 }, list: { x: 1208, y: 360, width: 600 } }, NEWS_SHOWN = 3, NEWS_QUIET = 700, NEWS_TURN_END = 800;
+  var news = { source: null, items: [], loading: false, error: null, fetched: 0, due: 0, request: 0, timer: 0, key: '', arrived: null, paint: 0, page: 0, turn: 0, animate: false, cleanup: 0 };
   var lastPress = 0;
   function newsActive() { return !!NEWS && isAr() && S.c.news !== 'off' && !!newsSource(S.c.news); }
-  /* The card is there from the start, so arriving headlines only replace text: no new layer or field image. */
+  function newsPageCount() { return Math.max(1, Math.ceil(news.items.length / NEWS_SHOWN)); }
+  function newsShown() { return news.items.slice(news.page * NEWS_SHOWN, news.page * NEWS_SHOWN + NEWS_SHOWN); }
+  /* The card is there from the start, so arriving headlines only replace text: no new layer or field image.
+     Headlines show three at a time in fixed rows, so a page turn never changes the card's size. */
   function renderNews() {
-    var on = newsActive(), box = NEWS_BOX[S.c.layout], header, key, d, body;
+    var on = newsActive(), box = NEWS_BOX[S.c.layout], count, dots = '', d, i, items, body, key;
     newsEl.className = 'news' + (on ? ' is-on' : '');
     if (!on) return;
     newsEl.style.left = box.x + 'px'; newsEl.style.top = box.y + 'px'; newsEl.style.width = box.width + 'px';
     fieldTransform(newsField, box.x, box.y, box.width, 360);
+    count = newsPageCount();
+    if (news.page >= count) news.page = 0;
+    for (i = 0; count > 1 && i < count; i++) dots += '<span class="news-dot' + (i === news.page ? ' is-on' : '') + '"></span>';
     d = new Date(news.fetched);
-    header = '<span class="news-source">' + esc(newsName(news.source)) + '</span>' + (news.fetched ? '<span class="news-time">' + esc(tx('Updated {time}', { time: (d.getHours() % 12 || 12) + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() })) + '</span>' : '');
-    body = news.items.length ? '<ul class="news-list">' + news.items.slice(0, NEWS_SHOWN).map(function (item) { return '<li class="news-item">' + esc(item.title) + '</li>'; }).join('') + '</ul>'
+    setHTML(newsHead, '<span class="news-source">' + esc(newsName(news.source)) + '</span>' + (dots || news.fetched ? '<span class="news-meta">'
+      + (dots ? '<span class="news-dots" aria-hidden="true">' + dots + '</span>' : '')
+      + (news.fetched ? '<span class="news-time">' + esc(tx('Updated {time}', { time: (d.getHours() % 12 || 12) + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() })) + '</span>' : '') + '</span>' : ''));
+    items = newsShown();
+    body = items.length ? '<ul class="news-list">' + items.map(function (item) { return '<li class="news-item">' + esc(item.title) + '</li>'; }).join('') + '</ul>'
       : news.error ? '<p class="news-error">' + esc(tx(news.error)) + '</p>' : '<p class="news-wait">' + esc(tx('Loading the news…')) + '</p>';
-    key = lang() + '|' + header + '|' + body;
+    key = lang() + '|' + body;
     if (key === news.key) return;
     news.key = key;
-    newsBody.innerHTML = '<div class="flip"><p class="news-head">' + header + '</p>' + body + '</div>';
+    newsPages.className = 'news-pages rows-' + items.length;
+    turnPage(body, news.animate && !!newsPages.firstChild);
+    news.animate = false;
+  }
+  /* A page turn: the shown rows lift away, then the next three rise into the same places one after
+     another. Only opacity and transform change, so the TV composites it; the outgoing page is then removed. */
+  function turnPage(html, animate) {
+    var page = document.createElement('div'), old = Array.prototype.slice.call(newsPages.children);
+    old.forEach(function (el) { if (animate && el.className === 'news-page') el.className = 'news-page is-leaving'; else newsPages.removeChild(el); });
+    page.className = 'news-page' + (animate ? ' is-entering' : '');
+    page.innerHTML = html;
+    newsPages.appendChild(page);
+    if (!animate) return;
+    page.offsetWidth; // Establish the starting place before the rows move in.
+    page.className = 'news-page';
+    clearTimeout(news.cleanup);
+    news.cleanup = setTimeout(function () {
+      Array.prototype.slice.call(newsPages.querySelectorAll('.is-leaving')).forEach(function (el) { newsPages.removeChild(el); });
+    }, NEWS_TURN_END);
+  }
+  function stopTurns() { clearTimeout(news.turn); news.turn = 0; }
+  function scheduleTurn() {
+    stopTurns();
+    if (newsActive() && !document.hidden && news.items.length > NEWS_SHOWN) news.turn = setTimeout(turnNews, QA.newsTurnMs);
+  }
+  /* Every 30 seconds the next three of the newest twelve. A turn waits while the remote moves or a panel
+     covers Home, so it never lands during navigation. */
+  function turnNews() {
+    var wait = lastPress + NEWS_QUIET - Date.now();
+    news.turn = 0;
+    if (!newsActive() || document.hidden || news.items.length <= NEWS_SHOWN) return;
+    if (wait > 0 || top().id !== 'home') { news.turn = setTimeout(turnNews, Math.max(wait, 1000)); return; }
+    news.page = (news.page + 1) % newsPageCount(); news.animate = true;
+    renderNews();
+    scheduleTurn();
   }
   /* Fetch only while Arabic Home can be seen: on change, then every 15 minutes (2 after a failure). */
   function syncNews() {
     clearTimeout(news.timer); news.timer = 0;
-    if (!newsActive()) return;
+    if (!newsActive()) { stopTurns(); return; }
     if (news.source !== S.c.news) {
       news.source = S.c.news; news.items = []; news.error = null; news.fetched = 0; news.due = 0; news.request++; news.loading = false; news.key = '';
-      news.arrived = null; clearTimeout(news.paint); news.paint = 0;
+      news.arrived = null; clearTimeout(news.paint); news.paint = 0; news.page = 0; stopTurns();
     }
-    if (document.hidden || news.loading) return;
+    if (document.hidden) { stopTurns(); return; }
+    if (!news.turn) scheduleTurn();
+    if (news.loading) return;
     if (Date.now() >= news.due) { loadNews(); return; }
     news.timer = setTimeout(syncNews, news.due - Date.now() + 50);
   }
@@ -1591,8 +1696,10 @@
     if (wait > 0) { news.paint = setTimeout(showNews, wait); return; }
     news.arrived = null;
     if (arrived.error) news.error = arrived.error;
-    else { news.items = arrived.items; news.error = null; news.fetched = arrived.at; }
+    // Fresh headlines start again from the newest three, turning in like any other page.
+    else { news.animate = news.items.length > 0; news.items = arrived.items; news.error = null; news.fetched = arrived.at; news.page = 0; }
     if (top().id === 'home' || isSettingsDetail(top())) renderNews();
+    if (!arrived.error) scheduleTurn();
   }
 
   /* Sheets: a frame is built once per view/mode; fill() updates its slots. Persistent
@@ -1641,6 +1748,7 @@
           if (swatch || item.thumbnail) body += item.value === 'light' || item.value === 'dark'
             ? '<span class="setting-swatch swatch-' + item.value + '" aria-hidden="true"></span>'
             : '<img class="setting-swatch" src="' + WP + S.c.wall + '-thumb.jpg" alt="">';
+          if (item.mark) body += '<span class="setting-mark" aria-hidden="true">' + markHtml(item.mark, 48, 40, 34) + '</span>';
           body += '<span class="setting-copy"><span class="setting-name">' + esc(item.label) + '</span>'
             + (item.description ? '<span class="setting-description">' + esc(item.description) + '</span>' : '') + '</span>';
           if (!item.axis) body += icon('right', 'setting-forward');
@@ -1657,6 +1765,7 @@
     }
     setHTML(appearanceStatus, status);
     hint = selected.disabled ? '' : selected.action === 'settings.back' ? tx('Return to {name}', { name: tx(parentGroup(t)) }) : selected.action === 'settings.retry' ? tx('Retry this change') : selected.axis ? tx('Apply selected setting')
+      : /^inputs\./.test(selected.action) ? tx('Choose a name')
       : tx({ 'background.wallpaper': 'Choose a wallpaper', 'background.rotation': 'Choose a rotation interval', 'widgets.city': 'Choose a city', 'widgets.news': 'Choose a news source' }[selected.action] || 'Open on the TV');
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
@@ -2104,7 +2213,7 @@
     else {
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
-      after(); updateClock(); focusStage(); syncInput();
+      after(); updateClock(); focusStage(); syncSources();
     }
   });
   window.addEventListener('resize', fit);
@@ -2119,7 +2228,8 @@
     out.fonts = { available: LOOK_VALUES.font.slice(), arabic: LOOK_VALUES.arfont.slice(), loaded: Object.keys(fontMetrics).filter(function (id) { return !fontMetrics[id].fallback; }), baselineFallback: !!(fontMetrics.manrope && fontMetrics.manrope.fallback), error: S.lookError && S.lookError.type === 'font' ? S.lookError : null };
     out.display = { lang: lang(), dir: stage.getAttribute('dir') };
     out.prayers = ALMANAC ? ALMANAC.prayers(Date.now(), S.c.city) : null;
-    out.headlines = { active: newsActive(), source: news.source, loading: news.loading, error: news.error, titles: news.items.map(function (item) { return item.title; }) };
+    out.headlines = { active: newsActive(), source: news.source, loading: news.loading, error: news.error, titles: news.items.map(function (item) { return item.title; }),
+      page: news.page, pages: newsPageCount(), shown: newsShown().map(function (item) { return item.title; }), turning: !!news.turn };
     out.rotation = { activeMs: activeMs + (activeSince ? Date.now() - activeSince : 0), active: !!activeSince };
     out.draft = t.lifted ? { id: t.lifted.id, order: t.lifted.order.slice() } : null;
     out.settingsGroup = t.id === 'wallpaper' ? 'wallpaper' : t.id === 'appearance' ? t.group : null;
@@ -2147,6 +2257,6 @@
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
   initialise();
   setLook({}, { transient: true, startup: true });
-  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews(); syncInput();
+  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); syncNews(); syncSources();
   setTimeout(function () { if (booting) { booting = false; render(); } }, BOOT_LIMIT);
 })();

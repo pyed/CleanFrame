@@ -112,6 +112,18 @@ window.CleanFrameStrings = {
       'Open on the TV': 'فتح على التلفاز',
       'Choose a city': 'اختيار مدينة',
       'Choose a news source': 'اختيار مصدر الأخبار',
+      'Choose a name': 'اختيار اسم',
+      'Inputs': 'المصادر',
+      'None on Home': 'لا شيء في الرئيسية',
+      'Connected': 'متصل',
+      'Not connected': 'غير متصل',
+      'Add an input to Home from Apps on Home. Back on Home returns to the input on screen.': 'أضف مصدرًا إلى الرئيسية من «تطبيقات الرئيسية». ويعيدك زر الرجوع في الرئيسية إلى المصدر المعروض.',
+      'The name and outline appear on the HDMI {n} tile.': 'يظهر الاسم والرمز على مربع HDMI {n}.',
+      'PC': 'الكمبيوتر',
+      'Laptop': 'اللابتوب',
+      'Game console': 'جهاز الألعاب',
+      'Receiver': 'الرسيفر',
+      'Media player': 'مشغّل الوسائط',
 
       /* Wallpaper picker */
       'Preparing {name}…': 'جارٍ تجهيز {name}…',

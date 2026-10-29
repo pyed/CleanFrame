@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../app/device.js', import.meta.url), 'utf8');
-function harness({ video } = {}) {
+function harness({ video, screen } = {}) {
   let now = 0, next = 0;
   const timers = new Map(), requests = [], launches = [], switches = [];
   const application = {
@@ -17,7 +17,7 @@ function harness({ video } = {}) {
   // The TV's video sources and window, when a test supplies them.
   if (video) {
     window.tizen.systeminfo = { getPropertyValue: (name, ok) => { assert.equal(name, 'VIDEOSOURCE'); ok(video); } };
-    window.tizen.tvwindow = { setSource: (source, ok, fail) => switches.push({ source, ok, fail }) };
+    window.tizen.tvwindow = { setSource: (input, ok, fail) => switches.push({ source: input, ok, fail }), getSource: () => { if (screen instanceof Error) throw screen; return screen; } };
   }
   vm.runInNewContext(source, {
     window, tizen: window.tizen,
@@ -138,4 +138,12 @@ test('without the TV window API, an input asks for the TV', () => {
   assert.match(results[0].message, /Open CleanFrame on the TV/);
   h.device.inputs(error => results.push(error));
   assert.match(results[1].message, /Open CleanFrame on the TV/);
+});
+
+test('the current input is the HDMI port on screen, or 0', () => {
+  const video = { connected: [], disconnected: [] };
+  assert.equal(harness({ video, screen: { type: 'HDMI', number: 3 } }).device.currentInput(), 3);
+  assert.equal(harness({ video, screen: { type: 'TV', number: 1 } }).device.currentInput(), 0);
+  assert.equal(harness({ video, screen: new Error('No window') }).device.currentInput(), 0);
+  assert.equal(harness().device.currentInput(), 0);
 });

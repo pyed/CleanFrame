@@ -6,7 +6,7 @@
 - List: Up/Down scrolls the apps without wrapping. Right enters the bottom-right controls, aligned with the clock above. Up/Down moves between Art Mode, All apps and Settings. Left or Back returns to the selected app. The list fades at both ends as it scrolls.
 - OK opens the selected item. Focus alone never launches an app.
 - Icons-only apps and controls reveal their names when focused. App presentation and control presentation are independent.
-- Back from the app list or Dock opens a choice to stay or open Samsung Home.
+- Back from the app list or Dock returns to the HDMI input on screen, such as a PC, in one press. On another source, or when the TV cannot say, it opens a choice to stay or open Samsung Home.
 - A panel keeps focus within its own controls. Back closes one panel at a time.
 - Returning to the running launcher keeps the selected app or panel item. There is no auto-return timer. Held OK and Back keys act once until the key is released.
 
@@ -22,6 +22,7 @@ Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps o
 | Focus | Type or Glass; Soft, Frost or Clear tint material |
 | Apps on Home | Membership and arrangement editor |
 | Samsung | Samsung Home and TV settings |
+| Inputs | A name and outline for each HDMI port (HDMI 1-4) |
 | Widgets | Date and prayer times, each Show or Hide; prayer city; headline source (Arabic only) |
 | Language | English or العربية |
 
@@ -47,7 +48,7 @@ The clock column can show a date line and prayer times, each controlled under Se
 
 Prayer times show the next prayer with a countdown (`Asr in 2 h 38 min`) and the day's five times, the next one emphasised; on Fridays Dhuhr is labelled Jumuah. Times are calculated offline in 12-hour form for the chosen city with its official method: Umm al-Qura for the Saudi cities, and the UAE, Qatar and Kuwait methods for those cities, with the standard Asr. They use the city's fixed UTC offset, so the countdown stays correct even if the TV is set to another time zone. The lines refresh with the clock at each minute. A soft photo shade sits under them, mirrored with the photo.
 
-In Arabic, a glass card shows the three newest headlines from the selected source: Sabq (default), Al Arabiya, Al Jazeera, Sky News Arabia or Asharq Al-Awsat, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
+In Arabic, a glass card shows headlines from the selected source, three at a time: Sabq (default), Al Arabiya, Al Jazeera, Sky News Arabia or Asharq Al-Awsat, or Off. It sits opposite the clock: top left in the Dock, below the clock in List. Every 30 seconds the card turns to the next three of the newest twelve, then back to the newest; dots show the page. The rows lift away and the next three rise into the same places one after another, using only opacity and transform, and the card keeps its size. A turn waits while the remote moves or a panel covers Home, and turns stop while the launcher is hidden. Headlines are plain text with no links or images. They refresh every 15 minutes while Home is visible, two minutes after a failure, and never while the launcher is hidden. A failure says so on the card. Headlines are CleanFrame's only network use; English never requests them.
 
 The news never holds up the remote. A background worker fetches and reads the feed and passes back only the titles; the card appears at once with a loading line, so arriving headlines replace text in place. New headlines wait until the remote has rested for 0.7 seconds, so they never land during a move. Sabq, Al Arabiya and Al Jazeera send no CORS headers. A desktop browser refuses them, so the browser preview's card says that the source is for the TV. The packaged app read all five sources on the Tizen 6.5 TV listed in [compatibility](compatibility.md).
 
@@ -55,11 +56,15 @@ At startup, Home stays hidden until its fonts and photo are ready, for at most f
 
 ## Streaming apps
 
-Home starts with HDMI 3, YouTube, Plex and Apple TV. The known services, Plex included, keep their native IDs and bundled marks. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
+Home starts with the PC on HDMI 3, YouTube, Plex and Apple TV. The known services, Plex included, keep their native IDs and bundled marks. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
 
 ## HDMI input
 
-The first Home tile is not an app: OK puts the TV on that HDMI input and shows it, in one press. It uses the public `tizen.tvwindow.setSource` API with the TV's own source record from `tizen.systeminfo` `VIDEOSOURCE`, then opens the TV's viewer (`org.tizen.tv-viewer`), which shows the current source. If the viewer cannot open, CleanFrame hides to uncover the TV's picture. The tile names the input it opens: HDMI 3 when the TV lists HDMI 3 as connected or lists nothing as connected, otherwise the connected input. A device on standby can be listed as disconnected and can still be selected. It is checked when Home starts and each time it returns. An input the TV does not list, or a browser preview, produces a real error. The tile can be moved or removed like an app; once removed, it leads Not on Home in the editor. The owner of the Tizen 6.5 TV in [compatibility](compatibility.md) confirmed that OK on the tile switches the TV to HDMI 3.
+Each HDMI port has its own tile; HDMI 3 starts on Home as the PC. A tile is not an app: OK puts the TV on that port and shows it, in one press. It uses the public `tizen.tvwindow.setSource` API with the TV's own source record from `tizen.systeminfo` `VIDEOSOURCE`, then opens the TV's viewer (`org.tizen.tv-viewer`), which shows the current source. If the viewer cannot open, CleanFrame hides to uncover the TV's picture. A device on standby can be listed as disconnected and can still be selected. An input the TV does not list, or a browser preview, produces a real error. Tiles move or leave Home like apps; inputs not on Home lead Not on Home in the editor.
+
+Settings → Inputs lists HDMI 1-4 with their names, and whether the TV reports each as connected (read when Home starts and each time it returns). It opens on the port the TV is showing. Each port takes one of eight names with a matching outline: its own port name, PC, Laptop, Game console, PlayStation, Xbox, Receiver or Media player. The choice is saved directly and named in the interface language; brand names keep their spelling.
+
+Back on Home reads the TV's current source (`tizen.tvwindow.getSource`). On an HDMI input it switches back to that input the same way, so Home → Back returns to the PC. Back from the Home controls still returns to the apps first. The owner of the Tizen 6.5 TV in [compatibility](compatibility.md) confirmed that OK on the tile switches the TV to HDMI 3.
 
 ## All apps
 

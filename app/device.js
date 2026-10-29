@@ -76,6 +76,13 @@
       if (err) done(err); else done(null, { connected: sources.connected.map(number), listed: sources.connected.concat(sources.disconnected).map(number) });
     });
   }
+  /* The HDMI input the TV is on (its number), or 0 on another source or when the TV cannot say. */
+  function currentInput() {
+    var tv = window.tizen, source;
+    try { source = tv && tv.tvwindow && tv.tvwindow.getSource(); }
+    catch (err) { return 0; }
+    return source && source.type === 'HDMI' && source.number > 0 ? source.number : 0;
+  }
   /* Put the TV on an HDMI input, then bring up the viewer to show it. Without the viewer,
      hiding CleanFrame uncovers the TV's picture, now on that input. */
   function input(port, done) {
@@ -124,5 +131,5 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, input: input, inputs: inputs, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, input: input, inputs: inputs, currentInput: currentInput, art: art, home: home, settings: settings, apps: apps };
 }());

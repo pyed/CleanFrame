@@ -497,6 +497,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .setting-forward{width:28px;height:28px;margin-left:auto;flex:none}
 .setting-swatch{flex:none;width:80px;height:50px;margin-right:8px;object-fit:cover;border-radius:8px}
 .setting-choice.is-disabled .setting-swatch{opacity:.5}
+.setting-mark{flex:none;display:flex;align-items:center;justify-content:center;width:48px;height:40px;margin-right:16px;opacity:.86}
+.setting-choice.is-disabled .setting-mark{opacity:.4}
 .swatch-light{background:#f2efe8;box-shadow:inset 0 0 0 1px rgba(29,26,22,.12)}
 .swatch-dark{background:#0d0d0d;box-shadow:inset 0 0 0 1px rgba(246,241,231,.15)}
 .setting-reason{margin-top:16px;font-size:26px;line-height:36px;color:var(--mute)}
@@ -676,12 +678,30 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .bg-light .news-body{color:var(--ink)}
 .news-head{display:flex;align-items:baseline;justify-content:space-between;font-size:24px;line-height:32px;font-weight:500;opacity:.72;white-space:nowrap}
 .news-head>*+*{margin-left:24px}
-.news-list{list-style:none;margin-top:14px}
-.news-item{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:28px;line-height:38px;font-weight:500}
-.news-item+.news-item{margin-top:16px;padding-top:16px;border-top:1px solid rgba(246,241,231,.16)}
-.bg-light .news-item+.news-item{border-top-color:var(--line)}
-.news-error{margin-top:12px;font-size:26px;line-height:36px;opacity:.8}
-.news-wait{margin-top:12px;font-size:26px;line-height:36px;opacity:.56}
+.news-meta{display:flex;align-items:center}
+.news-dots{display:flex;align-items:center;margin-right:16px}
+.news-dot{width:8px;height:8px;border-radius:4px;background:currentColor;opacity:.32;transition:width 320ms cubic-bezier(.2,.7,.2,1),opacity 320ms linear}
+.news-dot+.news-dot{margin-left:6px}
+.news-dot.is-on{width:22px;opacity:.9}
+/* Three fixed rows (two lines each) with fixed rules: a page turn moves text only, never the card. */
+.news-pages{position:relative;height:294px;margin-top:14px}
+.news-pages::before,.news-pages::after{content:"";position:absolute;left:0;right:0;height:1px;background:rgba(246,241,231,.16);transition:opacity 300ms linear}
+.news-pages::before{top:92px}
+.news-pages::after{top:201px}
+.bg-light .news-pages::before,.bg-light .news-pages::after{background:var(--line)}
+.news-pages.rows-0::before,.news-pages.rows-0::after,.news-pages.rows-1::before,.news-pages.rows-1::after,.news-pages.rows-2::after{opacity:0}
+.news-page{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;justify-content:center}
+.news-list{list-style:none}
+/* Rows keep their own layers: on the TV, merging them back after each turn cost about 160 ms of main thread. */
+.news-item{position:absolute;left:0;right:0;top:0;height:76px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:28px;line-height:38px;font-weight:500;will-change:transform,opacity;transition:opacity 440ms cubic-bezier(.2,.7,.2,1) 240ms,transform 560ms cubic-bezier(.2,.7,.2,1) 240ms}
+.news-item:nth-child(2){top:109px;transition-delay:310ms}
+.news-item:nth-child(3){top:218px;transition-delay:380ms}
+.news-page.is-entering .news-item{opacity:0;transform:translate3d(0,22px,0)}
+.news-page.is-leaving .news-item{opacity:0;transform:translate3d(0,-16px,0);transition-duration:260ms,320ms;transition-delay:0s}
+.news-page.is-leaving .news-item:nth-child(2){transition-delay:40ms}
+.news-page.is-leaving .news-item:nth-child(3){transition-delay:80ms}
+.news-error{font-size:26px;line-height:36px;opacity:.8}
+.news-wait{font-size:26px;line-height:36px;opacity:.56}
 
 /* Settings overview: six groups are visible; the window scrolls with focus. */
 .settings-overview{height:712px;overflow:hidden}
@@ -744,6 +764,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .rtl .detail-background .section-rotation .setting-choice{padding-left:24px;padding-right:128px}
 .rtl .s-count,.rtl .cap-count{margin-left:0;margin-right:20px}
 .rtl .setting-swatch,.rtl .wallpaper-thumb{margin-right:0;margin-left:8px}
+.rtl .setting-mark{margin-right:0;margin-left:16px}
 .rtl .er-move,.rtl .eo-verb,.rtl .setting-forward{margin-left:0;margin-right:auto}
 /* The child-margin rules above, mirrored in the same order. */
 .rtl .warn>*+*{margin-left:0;margin-right:12px}
@@ -780,3 +801,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .rtl.l-list .quiet-utils.is-text .u .u-content>*+*{margin-left:0}
 .rtl .info-times>*+*{margin-left:0;margin-right:28px}
 .rtl .news-head>*+*{margin-left:0;margin-right:24px}
+.rtl .news-dots{margin-right:0;margin-left:16px}
+.rtl .news-dot+.news-dot{margin-left:0;margin-right:6px}
+@media(prefers-reduced-motion:reduce){.news-item,.news-page.is-leaving .news-item{transition:opacity 200ms linear;transition-delay:0s!important}.news-page.is-entering .news-item,.news-page.is-leaving .news-item{transform:none}}
